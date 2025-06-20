@@ -1,27 +1,15 @@
-import TonConnect from '@tonconnect/sdk';
-import { InMemoryStorage } from "./InMemoryStorage";
+import {TonConnectSSEBridge} from "../src";
 
+describe('Bridge', () => {
 
-describe('TonConnect', () => {
-    const connector = new TonConnect({
-        // TODO: when repo becomes public change to own url
-        manifestUrl: 'https://raw.githubusercontent.com/ton-org/blueprint/refs/heads/develop/tonconnect/manifest.json',
-        storage: new InMemoryStorage(),
+    it("should connect to bridge", async () => {
+        const client1 = new TonConnectSSEBridge('1');
+        client1.connect();
+        const client2 = new TonConnectSSEBridge('2');
+        client2.connect();
+
+        await new Promise(resolve => setTimeout(resolve, 1000));
+        client1.send('1');
+        await new Promise(resolve => setTimeout(resolve, 1000));
     });
-
-    const unsubscribe = connector.onStatusChange(
-        walletInfo => {
-            console.log(walletInfo);
-        }
-    );
-
-    it('should connect to bridge', async () => {
-        const res = connector.connect({
-            universalLink: 'http://localhost:8545',
-            bridgeUrl: 'http://localhost:8082'
-        }, {openingDeadlineMS: 1000});
-        console.log(res);
-    });
-
-
 });

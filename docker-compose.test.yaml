@@ -3,3 +3,6 @@ services:
     image: abahdanautop/ton-connect-bridge2
     environment:
       - VERBOSITY=3
+    ports:
+      - "8080:8080"
+      - "8081:8081"
