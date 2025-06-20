@@ -1,0 +1,5 @@
+services:
+  bridge:
+    image: abahdanautop/ton-connect-bridge2
+    environment:
+      - VERBOSITY=3

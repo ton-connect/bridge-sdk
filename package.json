@@ -1,6 +1,6 @@
 {
   "name": "bridge-sdk",
-  "version": "1.0.0",
+  "version": "0.1.0",
   "main": "dist/index.js",
   "module": "./dist/index.js",
   "types": "./dist/index.d.ts",
@@ -20,6 +20,7 @@
   },
   "devDependencies": {
     "@ton/toolchain": "the-ton-tech/toolchain#v1",
+    "@tonconnect/sdk": "^3.1.0",
     "@types/jest": "^30.0.0",
     "@types/node": "^24.0.3",
     "eslint": "^9.29.0",
