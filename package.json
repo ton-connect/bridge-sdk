@@ -1,0 +1,27 @@
+{
+  "name": "bridge-sdk",
+  "version": "1.0.0",
+  "main": "dist/index.js",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "repository": "https://github.com/Alejandbel/bridge-sdk",
+  "author": "TonTech",
+  "prettier": "@ton/toolchain/prettier",
+  "files": [
+    "dist/**/*"
+  ],
+  "license": "MIT",
+  "scripts": {
+    "lint": "eslint . --max-warnings 0",
+    "lint:fix": "eslint . --max-warnings 0 --fix",
+    "build": "tsup src/index.ts --dts --format esm,cjs --out-dir dist",
+    "clean": "rm -rf dist"
+  },
+  "devDependencies": {
+    "@ton/toolchain": "the-ton-tech/toolchain#v1",
+    "@types/node": "^24.0.3",
+    "eslint": "^9.29.0",
+    "tsup": "^8.5.0",
+    "typescript": "^5.8.3"
+  }
+}
