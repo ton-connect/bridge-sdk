@@ -15,12 +15,16 @@
     "lint": "eslint . --max-warnings 0",
     "lint:fix": "eslint . --max-warnings 0 --fix",
     "build": "tsup src/index.ts --dts --format esm,cjs --out-dir dist",
-    "clean": "rm -rf dist"
+    "clean": "rm -rf dist",
+    "test": "jest"
   },
   "devDependencies": {
     "@ton/toolchain": "the-ton-tech/toolchain#v1",
+    "@types/jest": "^30.0.0",
     "@types/node": "^24.0.3",
     "eslint": "^9.29.0",
+    "jest": "^30.0.2",
+    "ts-jest": "^29.4.0",
     "tsup": "^8.5.0",
     "typescript": "^5.8.3"
   }
