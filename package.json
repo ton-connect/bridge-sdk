@@ -19,7 +19,7 @@
     "test": "jest"
   },
   "devDependencies": {
-    "@ton/toolchain": "the-ton-tech/toolchain#v1",
+    "@ton/toolchain": "the-ton-tech/toolchain#v1.4.0",
     "@tonconnect/sdk": "^3.1.0",
     "@types/jest": "^30.0.0",
     "@types/node": "^24.0.3",
