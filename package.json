@@ -25,11 +25,13 @@
     "@types/node": "^24.0.3",
     "eslint": "^9.29.0",
     "jest": "^30.0.2",
+    "jiti": "^2.4.2",
     "ts-jest": "^29.4.0",
     "tsup": "^8.5.0",
     "typescript": "^5.8.3"
   },
   "dependencies": {
+    "@tonconnect/protocol": "^2.2.7",
     "axios": "^1.10.0"
   }
 }

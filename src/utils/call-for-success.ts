@@ -1,6 +1,6 @@
-import { delay } from './delay';
-import { createAbortController } from './abort-controller';
-import { BridgeGatewayError } from '../errors/BridgeGatewayError';
+import { delay } from 'src/utils/delay';
+import { TonConnectError } from 'src/errors';
+import { createAbortController } from 'src/utils/create-abort-controller';
 
 /**
  * Configuration options for the callForSuccess function.
@@ -37,7 +37,7 @@ export async function callForSuccess<T extends (options: { signal?: AbortSignal 
     const abortController = createAbortController(options?.signal);
 
     if (typeof fn !== 'function') {
-        throw new BridgeGatewayError(`Expected a function, got ${typeof fn}`);
+        throw new TonConnectError(`Expected a function, got ${typeof fn}`);
     }
 
     let i = 0;
@@ -45,7 +45,7 @@ export async function callForSuccess<T extends (options: { signal?: AbortSignal 
 
     while (i < attempts) {
         if (abortController.signal.aborted) {
-            throw new BridgeGatewayError(`Aborted after attempts ${i}`);
+            throw new TonConnectError(`Aborted after attempts ${i}`);
         }
 
         try {

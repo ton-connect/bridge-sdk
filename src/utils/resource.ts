@@ -1,6 +1,6 @@
+import { BridgeSdkError } from '../errors/bridge-sdk.error';
 import { delay } from './delay';
-import { createAbortController } from './abort-controller';
-import { BridgeGatewayError } from '../errors/BridgeGatewayError';
+import { createAbortController } from './create-abort-controller';
 
 /**
  * The resource interface.
@@ -36,7 +36,7 @@ export type Resource<T, Args extends any[]> = {
  * @param {(...args: Args) => Promise<T>} createFn - A function that creates the resource.
  * @param {(resource: T) => Promise<void>} [disposeFn] - An optional function that disposes the resource.
  */
-export function createResource<T extends EventSource, Args extends unknown[]>(
+export function createResource<T extends EventSource, Args extends any[]>(
     createFn: (signal?: AbortSignal, ...args: Args) => Promise<T>,
     disposeFn: (resource: T) => Promise<void>,
 ): Resource<T, Args> {
@@ -54,7 +54,7 @@ export function createResource<T extends EventSource, Args extends unknown[]>(
         abortController = createAbortController(signal);
 
         if (abortController.signal.aborted) {
-            throw new BridgeGatewayError('Resource creation was aborted');
+            throw new BridgeSdkError('Resource creation was aborted');
         }
 
         currentArgs = args ?? null;
@@ -65,17 +65,19 @@ export function createResource<T extends EventSource, Args extends unknown[]>(
 
         if (currentPromise !== promise && resource !== currentResource) {
             await disposeFn(resource);
-            throw new BridgeGatewayError('Resource creation was aborted by a new resource creation');
+            throw new BridgeSdkError('Resource creation was aborted by a new resource creation');
         }
 
         currentResource = resource;
         return currentResource;
     };
 
+    // get the current resource
     const current = (): T | null => {
         return currentResource ?? null;
     };
 
+    // dispose the current resource
     const dispose = async (): Promise<void> => {
         try {
             const resource = currentResource;
@@ -95,6 +97,7 @@ export function createResource<T extends EventSource, Args extends unknown[]>(
         } catch (e) {}
     };
 
+    // recreate the current resource
     const recreate = async (delayMs: number): Promise<T> => {
         const resource = currentResource;
         const promise = currentPromise;
@@ -112,7 +115,7 @@ export function createResource<T extends EventSource, Args extends unknown[]>(
             return await create(currentSignal!, ...((args ?? []) as Args));
         }
 
-        throw new BridgeGatewayError('Resource recreation was aborted by a new resource creation');
+        throw new BridgeSdkError('Resource recreation was aborted by a new resource creation');
     };
 
     return {

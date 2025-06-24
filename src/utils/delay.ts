@@ -1,4 +1,4 @@
-import { BridgeGatewayError } from '../errors/BridgeGatewayError';
+import { BridgeSdkError } from '../errors/bridge-sdk.error';
 
 /**
  * Configuration options for the delay function.
@@ -19,14 +19,14 @@ export type DelayFnOptions = {
 export async function delay(timeout: number, options?: DelayFnOptions): Promise<void> {
     return new Promise((resolve, reject) => {
         if (options?.signal?.aborted) {
-            reject(new BridgeGatewayError('Delay aborted'));
+            reject(new BridgeSdkError('Delay aborted'));
             return;
         }
 
         const timeoutId = setTimeout(() => resolve(), timeout);
         options?.signal?.addEventListener('abort', () => {
             clearTimeout(timeoutId);
-            reject(new BridgeGatewayError('Delay aborted'));
+            reject(new BridgeSdkError('Delay aborted'));
         });
     });
 }

@@ -1,5 +1,5 @@
-import { BridgeGatewayError } from '../errors/BridgeGatewayError';
-import { createAbortController } from './abort-controller';
+import { TonConnectError } from 'src/errors';
+import { createAbortController } from 'src/utils/create-abort-controller';
 
 /**
  * Represents the options for deferring a task.
@@ -26,7 +26,7 @@ export type DeferOptions = {
 export type Deferrable<T> = (
     resolve: (value: T) => void,
     reject: (reason?: any) => void,
-    options: DeferOptions
+    options: DeferOptions,
 ) => Promise<void>;
 
 /**
@@ -44,7 +44,7 @@ export function timeout<T>(fn: Deferrable<T>, options?: DeferOptions): Promise<T
 
     return new Promise(async (resolve, reject) => {
         if (abortController.signal.aborted) {
-            reject(new BridgeGatewayError('Operation aborted'));
+            reject(new TonConnectError('Operation aborted'));
             return;
         }
 
@@ -52,7 +52,7 @@ export function timeout<T>(fn: Deferrable<T>, options?: DeferOptions): Promise<T
         if (typeof timeout !== 'undefined') {
             timeoutId = setTimeout(() => {
                 abortController.abort();
-                reject(new BridgeGatewayError(`Timeout after ${timeout}ms`));
+                reject(new TonConnectError(`Timeout after ${timeout}ms`));
             }, timeout);
         }
 
@@ -60,9 +60,9 @@ export function timeout<T>(fn: Deferrable<T>, options?: DeferOptions): Promise<T
             'abort',
             () => {
                 clearTimeout(timeoutId);
-                reject(new BridgeGatewayError('Operation aborted'));
+                reject(new TonConnectError('Operation aborted'));
             },
-            { once: true }
+            { once: true },
         );
 
         const deferOptions = { timeout, abort: abortController.signal };
@@ -75,7 +75,7 @@ export function timeout<T>(fn: Deferrable<T>, options?: DeferOptions): Promise<T
                 clearTimeout(timeoutId);
                 reject();
             },
-            deferOptions
+            deferOptions,
         );
     });
 }

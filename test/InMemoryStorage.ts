@@ -1,4 +1,4 @@
-import {IStorage} from "@tonconnect/sdk";
+import { IStorage } from '@tonconnect/sdk';
 
 export class InMemoryStorage implements IStorage {
     private storage = new Map<string, string>();
