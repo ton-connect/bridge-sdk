@@ -15,15 +15,11 @@ import { createAbortController } from './utils/create-abort-controller';
 
 export class BridgeGateway {
     private readonly ssePath = 'events';
-
     private readonly postPath = 'message';
-
     private readonly heartbeatMessage = 'heartbeat';
 
     private readonly defaultTtl = 300;
-
     private readonly defaultReconnectDelay = 2000;
-
     private readonly defaultResendDelay = 5000;
 
     private eventSource = createResource(
@@ -85,25 +81,7 @@ export class BridgeGateway {
             signal?: AbortSignal;
             attempts?: number;
         },
-    ): Promise<void>;
-    /** @deprecated use send(message, receiver, topic, options) instead */
-    public async send(message: Uint8Array, receiver: string, topic: RpcMethod, ttl?: number): Promise<void>;
-    public async send(
-        message: Uint8Array,
-        receiver: string,
-        topic: RpcMethod,
-        ttlOrOptions?: number | { ttl?: number; signal?: AbortSignal; attempts?: number },
     ): Promise<void> {
-        // TODO: remove deprecated method
-        const options: { ttl?: number; signal?: AbortSignal; attempts?: number } = {};
-        if (typeof ttlOrOptions === 'number') {
-            options.ttl = ttlOrOptions;
-        } else {
-            options.ttl = ttlOrOptions?.ttl;
-            options.signal = ttlOrOptions?.signal;
-            options.attempts = ttlOrOptions?.attempts;
-        }
-
         const url = new URL(addPathToUrl(this.bridgeUrl, this.postPath));
         url.searchParams.append('client_id', this.sessionId);
         url.searchParams.append('to', receiver);
@@ -171,7 +149,9 @@ export class BridgeGateway {
         if (this.isReady) {
             try {
                 this.errorsListener(e);
-            } catch (e) {}
+            } catch (_) {
+                /* empty */
+            }
             return;
         }
 
@@ -198,7 +178,7 @@ export class BridgeGateway {
         let bridgeIncomingMessage: BridgeIncomingMessage;
         try {
             bridgeIncomingMessage = JSON.parse(e.data);
-        } catch (e) {
+        } catch (_) {
             throw new BridgeSdkError(`Bridge message parse failed, message ${e.data}`);
         }
         this.listener(bridgeIncomingMessage);

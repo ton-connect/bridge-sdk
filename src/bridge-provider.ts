@@ -2,7 +2,6 @@ import {
     AppRequest,
     Base64,
     ConnectEventSuccess,
-    ConnectRequest,
     hexToByteArray,
     RpcMethod,
     SessionCrypto,
@@ -11,23 +10,22 @@ import {
     WalletMessage,
     WalletResponse,
 } from '@tonconnect/protocol';
-import { BridgeSdkError } from './errors/bridge-sdk.error';
-import { WalletConnectionSourceHTTP } from 'src/models/wallet/wallet-connection-source';
-import { BridgeGateway } from 'src/provider/bridge/bridge-gateway';
-import { BridgeConnectionHttp, isPendingConnectionHttp } from 'src/provider/bridge/models/bridge-connection';
-import { BridgeIncomingMessage } from 'src/provider/bridge/models/bridge-incomming-message';
-import { BridgePartialSession, BridgeSession } from 'src/provider/bridge/models/bridge-session';
-import { HTTPProvider } from 'src/provider/provider';
-import { BridgeConnectionStorage } from 'src/storage/bridge-connection-storage';
-import { IStorage } from 'src/storage/models/storage.interface';
-import { Optional, WithoutId, WithoutIdDistributive } from 'src/utils/types';
-import { PROTOCOL_VERSION } from 'src/resources/protocol';
-import { logDebug, logError } from 'src/utils/log';
-import { encodeTelegramUrlParameters, isTelegramUrl } from 'src/utils/url';
-import { callForSuccess } from 'src/utils/call-for-success';
-import { createAbortController } from 'src/utils/create-abort-controller';
 
-export class BridgeProvider implements HTTPProvider {
+import { BridgeSdkError } from './errors/bridge-sdk.error';
+import { WalletConnectionSourceHTTP } from './models/wallet/wallet-connection-source';
+import { BridgeGateway } from './bridge-gateway';
+import { BridgeConnectionHttp, isPendingConnectionHttp } from './models/bridge/bridge-connection';
+import { BridgeIncomingMessage } from './models/bridge/bridge-incomming-message';
+import { BridgePartialSession, BridgeSession } from './models/bridge/bridge-session';
+import { BridgeConnectionStorage } from './storage/bridge-connection-storage';
+import { IStorage } from './storage/models/storage.interface';
+import { Optional, WithoutId, WithoutIdDistributive } from './utils/types';
+import { logDebug, logError } from './utils/log';
+import { callForSuccess } from './utils/call-for-success';
+import { createAbortController } from './utils/create-abort-controller';
+
+// TODO: interface?
+export class BridgeProvider {
     public static async fromStorage(storage: IStorage): Promise<BridgeProvider> {
         const bridgeConnectionStorage = new BridgeConnectionStorage(storage);
         const connection = await bridgeConnectionStorage.getHttpConnection();
@@ -39,8 +37,6 @@ export class BridgeProvider implements HTTPProvider {
     }
 
     public readonly type = 'http';
-
-    private readonly standardUniversalLink = 'tc://';
 
     private readonly connectionStorage: BridgeConnectionStorage;
 
@@ -69,13 +65,7 @@ export class BridgeProvider implements HTTPProvider {
         this.connectionStorage = new BridgeConnectionStorage(storage);
     }
 
-    public connect(
-        message: ConnectRequest,
-        options?: {
-            openingDeadlineMS?: number;
-            signal?: AbortSignal;
-        },
-    ): string {
+    public connect(options?: { openingDeadlineMS?: number; signal?: AbortSignal }): void {
         const abortController = createAbortController(options?.signal);
         this.abortController?.abort();
         this.abortController = abortController;
@@ -113,13 +103,6 @@ export class BridgeProvider implements HTTPProvider {
                     },
                 );
             });
-
-        const universalLink =
-            'universalLink' in this.walletConnectionSource && this.walletConnectionSource.universalLink
-                ? this.walletConnectionSource.universalLink
-                : this.standardUniversalLink;
-
-        return this.generateUniversalLink(universalLink, message);
     }
 
     public async restoreConnection(options?: { openingDeadlineMS?: number; signal?: AbortSignal }): Promise<void> {
@@ -197,7 +180,7 @@ export class BridgeProvider implements HTTPProvider {
                     signal: abortController.signal,
                 },
             );
-        } catch (e) {
+        } catch (_) {
             await this.disconnect({ signal: abortController.signal });
             return;
         }
@@ -210,30 +193,8 @@ export class BridgeProvider implements HTTPProvider {
             onRequestSent?: () => void;
             signal?: AbortSignal;
         },
-    ): Promise<WithoutId<WalletResponse<T>>>;
-    /** @deprecated use sendRequest(transaction, options) instead */
-    public sendRequest<T extends RpcMethod>(
-        request: WithoutId<AppRequest<T>>,
-        onRequestSent?: () => void,
-    ): Promise<WithoutId<WalletResponse<T>>>;
-    public sendRequest<T extends RpcMethod>(
-        request: WithoutId<AppRequest<T>>,
-        optionsOrOnRequestSent?: (() => void) | { attempts?: number; onRequestSent?: () => void; signal?: AbortSignal },
     ): Promise<WithoutId<WalletResponse<T>>> {
-        // TODO: remove deprecated method
-        const options: {
-            onRequestSent?: () => void;
-            signal?: AbortSignal;
-            attempts?: number;
-        } = {};
-        if (typeof optionsOrOnRequestSent === 'function') {
-            options.onRequestSent = optionsOrOnRequestSent;
-        } else {
-            options.onRequestSent = optionsOrOnRequestSent?.onRequestSent;
-            options.signal = optionsOrOnRequestSent?.signal;
-            options.attempts = optionsOrOnRequestSent?.attempts;
-        }
-
+        // eslint-disable-next-line no-async-promise-executor
         return new Promise(async (resolve, reject) => {
             if (!this.gateway || !this.session || !('walletPublicKey' in this.session)) {
                 throw new BridgeSdkError('Trying to send bridge request without session');
@@ -270,6 +231,7 @@ export class BridgeProvider implements HTTPProvider {
     }
 
     public async disconnect(options?: { signal?: AbortSignal }): Promise<void> {
+        // eslint-disable-next-line no-async-promise-executor
         return new Promise(async (resolve) => {
             let called = false;
             let timeoutId: ReturnType<typeof setTimeout> | null = null;
@@ -441,48 +403,6 @@ export class BridgeProvider implements HTTPProvider {
     private async removeBridgeAndSession(): Promise<void> {
         this.closeConnection();
         await this.connectionStorage.removeConnection();
-    }
-
-    private generateUniversalLink(universalLink: string, message: ConnectRequest): string {
-        if (isTelegramUrl(universalLink)) {
-            return this.generateTGUniversalLink(universalLink, message);
-        }
-
-        return this.generateRegularUniversalLink(universalLink, message);
-    }
-
-    private generateRegularUniversalLink(universalLink: string, message: ConnectRequest): string {
-        const url = new URL(universalLink);
-        url.searchParams.append('v', PROTOCOL_VERSION.toString());
-        url.searchParams.append('id', this.session!.sessionCrypto.sessionId);
-        url.searchParams.append('r', JSON.stringify(message));
-        return url.toString();
-    }
-
-    private generateTGUniversalLink(universalLink: string, message: ConnectRequest): string {
-        const urlToWrap = this.generateRegularUniversalLink('about:blank', message);
-        const linkParams = urlToWrap.split('?')[1]!;
-
-        const startapp = 'tonconnect-' + encodeTelegramUrlParameters(linkParams);
-
-        // TODO: Remove this line after all dApps and the wallets-list.json have been updated
-        const updatedUniversalLink = this.convertToDirectLink(universalLink);
-
-        const url = new URL(updatedUniversalLink);
-        url.searchParams.append('startapp', startapp);
-        return url.toString();
-    }
-
-    // TODO: Remove this method after all dApps and the wallets-list.json have been updated
-    private convertToDirectLink(universalLink: string): string {
-        const url = new URL(universalLink);
-
-        if (url.searchParams.has('attach')) {
-            url.searchParams.delete('attach');
-            url.pathname += '/start';
-        }
-
-        return url.toString();
     }
 
     private async openGateways(

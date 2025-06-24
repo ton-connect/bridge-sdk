@@ -2,7 +2,7 @@
  * Base class for BridgeSdk errors. You can check if the error was triggered by the @tonconnect/brdige-sdk using `err instanceof BridgeSdkError`.
  */
 export class BridgeSdkError<T = unknown> extends Error {
-    private static prefix = '[TON_CONNECT_SDK_ERROR]';
+    private static prefix = '[BRIDGE_SDK_ERROR]';
 
     protected get info(): string {
         return '';
@@ -16,10 +16,10 @@ export class BridgeSdkError<T = unknown> extends Error {
     ) {
         super(message, options);
 
-        this.message = `${TonConnectError.prefix} ${this.constructor.name}${
+        this.message = `${BridgeSdkError.prefix} ${this.constructor.name}${
             this.info ? ': ' + this.info : ''
         }${message ? '\n' + message : ''}`;
 
-        Object.setPrototypeOf(this, TonConnectError.prototype);
+        Object.setPrototypeOf(this, BridgeSdkError.prototype);
     }
 }

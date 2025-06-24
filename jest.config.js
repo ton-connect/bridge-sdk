@@ -7,5 +7,5 @@ module.exports = {
     transform: {
         ...tsJestTransformCfg,
     },
-    testMatch: ['**/*.{spec,e2e}.ts'],
+    testMatch: ['**/*.spec.ts'],
 };

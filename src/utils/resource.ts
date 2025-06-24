@@ -5,7 +5,7 @@ import { createAbortController } from './create-abort-controller';
 /**
  * The resource interface.
  */
-export type Resource<T, Args extends any[]> = {
+export type Resource<T, Args extends unknown[]> = {
     /**
      * Create a new resource.
      */
@@ -36,7 +36,7 @@ export type Resource<T, Args extends any[]> = {
  * @param {(...args: Args) => Promise<T>} createFn - A function that creates the resource.
  * @param {(resource: T) => Promise<void>} [disposeFn] - An optional function that disposes the resource.
  */
-export function createResource<T extends EventSource, Args extends any[]>(
+export function createResource<T extends EventSource, Args extends unknown[]>(
     createFn: (signal?: AbortSignal, ...args: Args) => Promise<T>,
     disposeFn: (resource: T) => Promise<void>,
 ): Resource<T, Args> {
@@ -88,13 +88,17 @@ export function createResource<T extends EventSource, Args extends any[]>(
 
             try {
                 abortController?.abort();
-            } catch (e) {}
+            } catch (_) {
+                /* empty */
+            }
 
             await Promise.allSettled([
                 resource ? disposeFn(resource) : Promise.resolve(),
                 promise ? disposeFn(await promise) : Promise.resolve(),
             ]);
-        } catch (e) {}
+        } catch (_) {
+            /* empty */
+        }
     };
 
     // recreate the current resource

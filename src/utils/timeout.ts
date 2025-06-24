@@ -1,5 +1,5 @@
-import { TonConnectError } from 'src/errors';
-import { createAbortController } from 'src/utils/create-abort-controller';
+import { createAbortController } from './create-abort-controller';
+import { BridgeSdkError } from '../errors/bridge-sdk.error';
 
 /**
  * Represents the options for deferring a task.
@@ -25,7 +25,7 @@ export type DeferOptions = {
  */
 export type Deferrable<T> = (
     resolve: (value: T) => void,
-    reject: (reason?: any) => void,
+    reject: (reason?: unknown) => void,
     options: DeferOptions,
 ) => Promise<void>;
 
@@ -42,9 +42,10 @@ export function timeout<T>(fn: Deferrable<T>, options?: DeferOptions): Promise<T
 
     const abortController = createAbortController(signal);
 
+    // eslint-disable-next-line no-async-promise-executor
     return new Promise(async (resolve, reject) => {
         if (abortController.signal.aborted) {
-            reject(new TonConnectError('Operation aborted'));
+            reject(new BridgeSdkError('Operation aborted'));
             return;
         }
 
@@ -52,7 +53,7 @@ export function timeout<T>(fn: Deferrable<T>, options?: DeferOptions): Promise<T
         if (typeof timeout !== 'undefined') {
             timeoutId = setTimeout(() => {
                 abortController.abort();
-                reject(new TonConnectError(`Timeout after ${timeout}ms`));
+                reject(new BridgeSdkError(`Timeout after ${timeout}ms`));
             }, timeout);
         }
 
@@ -60,7 +61,7 @@ export function timeout<T>(fn: Deferrable<T>, options?: DeferOptions): Promise<T
             'abort',
             () => {
                 clearTimeout(timeoutId);
-                reject(new TonConnectError('Operation aborted'));
+                reject(new BridgeSdkError('Operation aborted'));
             },
             { once: true },
         );
