@@ -13,6 +13,8 @@ import { createResource } from './utils/resource';
 import { timeout } from './utils/timeout';
 import { createAbortController } from './utils/create-abort-controller';
 
+import * as util from 'node:util';
+
 export class BridgeGateway {
     private readonly ssePath = 'events';
     private readonly postPath = 'message';
@@ -27,7 +29,7 @@ export class BridgeGateway {
             const eventSourceConfig = {
                 bridgeUrl: this.bridgeUrl,
                 ssePath: this.ssePath,
-                sessionId: this.sessionId,
+                sessionIds: this.sessionIds,
                 bridgeGatewayStorage: this.bridgeGatewayStorage,
                 errorHandler: this.errorsHandler.bind(this),
                 messageHandler: this.messagesHandler.bind(this),
@@ -61,7 +63,7 @@ export class BridgeGateway {
     constructor(
         storage: IStorage,
         public readonly bridgeUrl: string,
-        public readonly sessionId: string,
+        public readonly sessionIds: string[],
         private listener: (msg: BridgeIncomingMessage) => void,
         private errorsListener: (err: Event) => void,
     ) {
@@ -74,8 +76,9 @@ export class BridgeGateway {
 
     public async send(
         message: Uint8Array,
+        from: string,
         receiver: string,
-        topic: RpcMethod,
+        topic?: RpcMethod,
         options?: {
             ttl?: number;
             signal?: AbortSignal;
@@ -83,10 +86,12 @@ export class BridgeGateway {
         },
     ): Promise<void> {
         const url = new URL(addPathToUrl(this.bridgeUrl, this.postPath));
-        url.searchParams.append('client_id', this.sessionId);
+        url.searchParams.append('client_id', from);
         url.searchParams.append('to', receiver);
         url.searchParams.append('ttl', (options?.ttl || this.defaultTtl).toString());
-        url.searchParams.append('topic', topic);
+        if (topic) {
+            url.searchParams.append('topic', topic);
+        }
         const body = Base64.encode(message);
 
         await callForSuccess(
@@ -129,8 +134,8 @@ export class BridgeGateway {
     private async post(url: URL, body: string, signal?: AbortSignal): Promise<Response> {
         const response = await fetch(url, {
             method: 'post',
-            body: body,
-            signal: signal,
+            body,
+            signal,
         });
 
         if (!response.ok) {
@@ -149,7 +154,7 @@ export class BridgeGateway {
         if (this.isReady) {
             try {
                 this.errorsListener(e);
-            } catch (_) {
+            } catch {
                 /* empty */
             }
             return;
@@ -178,7 +183,7 @@ export class BridgeGateway {
         let bridgeIncomingMessage: BridgeIncomingMessage;
         try {
             bridgeIncomingMessage = JSON.parse(e.data);
-        } catch (_) {
+        } catch {
             throw new BridgeSdkError(`Bridge message parse failed, message ${e.data}`);
         }
         this.listener(bridgeIncomingMessage);
@@ -215,7 +220,7 @@ export type CreateEventSourceConfig = {
     /**
      * Session ID of the client.
      */
-    sessionId: string;
+    sessionIds: string[];
     /**
      * Storage for the last event ID.
      */
@@ -245,23 +250,22 @@ export type CreateEventSourceConfig = {
 async function createEventSource(config: CreateEventSourceConfig): Promise<EventSource> {
     return await timeout(
         async (resolve, reject, deferOptions) => {
-            const abortController = createAbortController(deferOptions.signal);
-            const signal = abortController.signal;
+            const { signal } = deferOptions;
 
-            if (signal.aborted) {
+            if (signal?.aborted) {
                 reject(new BridgeSdkError('Bridge connection aborted'));
                 return;
             }
 
             const url = new URL(addPathToUrl(config.bridgeUrl, config.ssePath));
-            url.searchParams.append('client_id', config.sessionId);
+            url.searchParams.append('client_id', config.sessionIds.join(','));
 
             const lastEventId = await config.bridgeGatewayStorage.getLastEventId();
             if (lastEventId) {
                 url.searchParams.append('last_event_id', lastEventId);
             }
 
-            if (signal.aborted) {
+            if (signal?.aborted) {
                 reject(new BridgeSdkError('Bridge connection aborted'));
                 return;
             }
@@ -269,7 +273,7 @@ async function createEventSource(config: CreateEventSourceConfig): Promise<Event
             const eventSource = new EventSource(url.toString());
 
             eventSource.onerror = async (reason: Event): Promise<void> => {
-                if (signal.aborted) {
+                if (signal?.aborted) {
                     eventSource.close();
                     reject(new BridgeSdkError('Bridge connection aborted'));
                     return;
@@ -290,7 +294,7 @@ async function createEventSource(config: CreateEventSourceConfig): Promise<Event
                 }
             };
             eventSource.onopen = (): void => {
-                if (signal.aborted) {
+                if (signal?.aborted) {
                     eventSource.close();
                     reject(new BridgeSdkError('Bridge connection aborted'));
                     return;
@@ -298,7 +302,7 @@ async function createEventSource(config: CreateEventSourceConfig): Promise<Event
                 resolve(eventSource);
             };
             eventSource.onmessage = (event: MessageEvent<string>): void => {
-                if (signal.aborted) {
+                if (signal?.aborted) {
                     eventSource.close();
                     reject(new BridgeSdkError('Bridge connection aborted'));
                     return;

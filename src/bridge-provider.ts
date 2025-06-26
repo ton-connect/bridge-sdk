@@ -24,7 +24,6 @@ import { logDebug, logError } from './utils/log';
 import { callForSuccess } from './utils/call-for-success';
 import { createAbortController } from './utils/create-abort-controller';
 
-// TODO: interface?
 export class BridgeProvider {
     public static async fromStorage(storage: IStorage): Promise<BridgeProvider> {
         const bridgeConnectionStorage = new BridgeConnectionStorage(storage);
@@ -35,8 +34,6 @@ export class BridgeProvider {
         }
         return new BridgeProvider(storage, { bridgeUrl: connection.session.bridgeUrl });
     }
-
-    public readonly type = 'http';
 
     private readonly connectionStorage: BridgeConnectionStorage;
 
@@ -69,8 +66,7 @@ export class BridgeProvider {
         const abortController = createAbortController(options?.signal);
         this.abortController?.abort();
         this.abortController = abortController;
-
-        this.closeGateways();
+        this.closeGateway();
 
         const sessionCrypto = new SessionCrypto();
 
@@ -114,7 +110,7 @@ export class BridgeProvider {
             return;
         }
 
-        this.closeGateways();
+        this.closeGateway();
         const storedConnection = await this.connectionStorage.getHttpConnection();
         if (!storedConnection) {
             return;
@@ -224,7 +220,7 @@ export class BridgeProvider {
     }
 
     public closeConnection(): void {
-        this.closeGateways();
+        this.closeGateway();
         this.listeners = [];
         this.session = null;
         this.gateway = null;
@@ -243,7 +239,7 @@ export class BridgeProvider {
             };
 
             try {
-                this.closeGateways();
+                this.closeGateway();
 
                 const abortController = createAbortController(options?.signal);
                 timeoutId = setTimeout(() => {
@@ -281,7 +277,6 @@ export class BridgeProvider {
 
     public pause(): void {
         this.gateway?.pause();
-        this.pendingGateways.forEach((bridge) => bridge.pause());
     }
 
     public async unPause(): Promise<void> {
@@ -290,30 +285,6 @@ export class BridgeProvider {
             promises.push(this.gateway.unPause());
         }
         await Promise.all(promises);
-    }
-
-    private async pendingGatewaysListener(
-        gateway: BridgeGateway,
-        bridgeUrl: string,
-        bridgeIncomingMessage: BridgeIncomingMessage,
-    ): Promise<void> {
-        if (!this.pendingGateways.includes(gateway)) {
-            await gateway.close();
-            return;
-        }
-
-        this.closeGateways({ except: gateway });
-
-        if (this.gateway) {
-            logDebug('Gateway is already opened, closing previous gateway');
-            await this.gateway.close();
-        }
-
-        this.session!.bridgeUrl = bridgeUrl;
-        this.gateway = gateway;
-        this.gateway.setErrorsListener(this.gatewayErrorsListener.bind(this));
-        this.gateway.setListener(this.gatewayListener.bind(this));
-        return this.gatewayListener(bridgeIncomingMessage);
     }
 
     private async gatewayListener(bridgeIncomingMessage: BridgeIncomingMessage): Promise<void> {
@@ -412,71 +383,26 @@ export class BridgeProvider {
             signal?: AbortSignal;
         },
     ): Promise<void> {
-        if (Array.isArray(this.walletConnectionSource)) {
-            // close all gateways before opening new ones
-            this.pendingGateways.map((bridge) => bridge.close().catch());
-
-            // open new gateways
-            this.pendingGateways = this.walletConnectionSource.map((source) => {
-                const gateway = new BridgeGateway(
-                    this.storage,
-                    source.bridgeUrl,
-                    sessionCrypto.sessionId,
-                    () => {},
-                    () => {},
-                );
-
-                gateway.setListener((message) => this.pendingGatewaysListener(gateway, source.bridgeUrl, message));
-
-                return gateway;
-            });
-
-            await Promise.allSettled(
-                this.pendingGateways.map((bridge) =>
-                    callForSuccess(
-                        (_options): Promise<void> => {
-                            if (!this.pendingGateways.some((item) => item === bridge)) {
-                                return bridge.close();
-                            }
-
-                            return bridge.registerSession({
-                                openingDeadlineMS: options?.openingDeadlineMS ?? this.defaultOpeningDeadlineMS,
-                                signal: _options.signal,
-                            });
-                        },
-                        {
-                            attempts: Number.MAX_SAFE_INTEGER,
-                            delayMs: this.defaultRetryTimeoutMS,
-                            signal: options?.signal,
-                        },
-                    ),
-                ),
-            );
-
-            return;
-        } else {
-            if (this.gateway) {
-                logDebug(`Gateway is already opened, closing previous gateway`);
-                await this.gateway.close();
-            }
-
-            this.gateway = new BridgeGateway(
-                this.storage,
-                this.walletConnectionSource.bridgeUrl,
-                sessionCrypto.sessionId,
-                this.gatewayListener.bind(this),
-                this.gatewayErrorsListener.bind(this),
-            );
-            return await this.gateway.registerSession({
-                openingDeadlineMS: options?.openingDeadlineMS,
-                signal: options?.signal,
-            });
+        if (this.gateway) {
+            logDebug(`Gateway is already opened, closing previous gateway`);
+            await this.gateway.close();
         }
+
+        this.gateway = new BridgeGateway(
+            this.storage,
+            this.walletConnectionSource.bridgeUrl,
+            sessionCrypto.sessionId,
+            this.gatewayListener.bind(this),
+            this.gatewayErrorsListener.bind(this),
+        );
+
+        return await this.gateway.registerSession({
+            openingDeadlineMS: options?.openingDeadlineMS,
+            signal: options?.signal,
+        });
     }
 
-    private closeGateways(options?: { except: BridgeGateway }): void {
+    private closeGateway(): void {
         this.gateway?.close();
-        this.pendingGateways.filter((item) => item !== options?.except).forEach((bridge) => bridge.close());
-        this.pendingGateways = [];
     }
 }

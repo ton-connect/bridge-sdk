@@ -1,4 +1,3 @@
-import { createAbortController } from './create-abort-controller';
 import { delay } from './delay';
 import { BridgeSdkError } from '../errors/bridge-sdk.error';
 
@@ -32,9 +31,7 @@ export async function callForSuccess<T extends (options: { signal?: AbortSignal 
     fn: T,
     options?: CallForSuccessOptions,
 ): Promise<Awaited<ReturnType<T>>> {
-    const attempts = options?.attempts ?? 10;
-    const delayMs = options?.delayMs ?? 200;
-    const abortController = createAbortController(options?.signal);
+    const { signal, attempts = 10, delayMs = 200 } = options ?? {};
 
     if (typeof fn !== 'function') {
         throw new BridgeSdkError(`Expected a function, got ${typeof fn}`);
@@ -44,12 +41,12 @@ export async function callForSuccess<T extends (options: { signal?: AbortSignal 
     let lastError: unknown;
 
     while (i < attempts) {
-        if (abortController.signal.aborted) {
+        if (signal?.aborted) {
             throw new BridgeSdkError(`Aborted after attempts ${i}`);
         }
 
         try {
-            return await fn({ signal: abortController.signal });
+            return await fn({ signal });
         } catch (err) {
             lastError = err;
             i++;
