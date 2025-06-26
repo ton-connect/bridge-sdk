@@ -36,19 +36,20 @@ export type Deferrable<T> = (
  * @param {DeferOptions} options - Optional configuration options for the defer behavior.
  * @returns {Promise<T>} - A promise that resolves with the result of the executed function, or rejects with an error if it times out or is aborted.
  */
-export function timeout<T>(fn: Deferrable<T>, options?: DeferOptions): Promise<T> {
+export async function timeout<T>(fn: Deferrable<T>, options?: DeferOptions): Promise<T> {
     const { timeout, signal } = options ?? {};
 
-    // eslint-disable-next-line no-async-promise-executor
-    return new Promise(async (resolve, reject) => {
-        if (signal?.aborted) {
-            reject(new BridgeSdkError('Operation aborted'));
-            return;
-        }
+    const { resolve, reject, promise } = Promise.withResolvers<T>();
 
-        const timeoutSignal = typeof timeout !== 'undefined' ? AbortSignal.timeout(timeout) : null;
+    if (signal?.aborted) {
+        reject(new BridgeSdkError('Operation aborted'));
+        return promise;
+    }
 
-        const deferOptions = { timeout, abort: anySignal(signal, timeoutSignal) };
-        await fn(resolve, reject, deferOptions);
-    });
+    const timeoutSignal = typeof timeout !== 'undefined' ? AbortSignal.timeout(timeout) : null;
+
+    const deferOptions = { timeout, abort: anySignal(signal, timeoutSignal) };
+    await fn(resolve, reject, deferOptions);
+
+    return promise;
 }

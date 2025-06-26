@@ -11,9 +11,6 @@ import { callForSuccess } from './utils/call-for-success';
 import { logDebug, logError } from './utils/log';
 import { createResource } from './utils/resource';
 import { timeout } from './utils/timeout';
-import { createAbortController } from './utils/create-abort-controller';
-
-import * as util from 'node:util';
 
 export class BridgeGateway {
     private readonly ssePath = 'events';
@@ -78,8 +75,8 @@ export class BridgeGateway {
         message: Uint8Array,
         from: string,
         receiver: string,
-        topic?: RpcMethod,
         options?: {
+            topic?: RpcMethod;
             ttl?: number;
             signal?: AbortSignal;
             attempts?: number;
@@ -89,8 +86,8 @@ export class BridgeGateway {
         url.searchParams.append('client_id', from);
         url.searchParams.append('to', receiver);
         url.searchParams.append('ttl', (options?.ttl || this.defaultTtl).toString());
-        if (topic) {
-            url.searchParams.append('topic', topic);
+        if (options?.topic) {
+            url.searchParams.append('topic', options.topic);
         }
         const body = Base64.encode(message);
 

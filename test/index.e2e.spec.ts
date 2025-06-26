@@ -12,7 +12,7 @@ describe('Bridge', () => {
         const gateway1 = new BridgeGateway(
             new InMemoryStorage(),
             BRIDGE_URL,
-            session1,
+            [session1],
             (e) => {
                 console.log('BRIDGE 1 e', Base64.decode(e.message).toString());
             },
@@ -22,7 +22,7 @@ describe('Bridge', () => {
         const gateway2 = new BridgeGateway(
             new InMemoryStorage(),
             BRIDGE_URL,
-            session2,
+            [session2, session1],
             (e) => console.log('BRIDGE 2 e', Base64.decode(e.message).toString()),
             (err) => console.error('BRIDGE 2 err', err),
         );
@@ -30,7 +30,7 @@ describe('Bridge', () => {
         await gateway1.registerSession();
         await gateway2.registerSession();
 
-        await gateway2.send(Buffer.from('Hey!'), session1);
+        await gateway2.send(Buffer.from('Hey!'), session1, session2);
 
         await new Promise((resolve) => setTimeout(resolve, 1000));
 

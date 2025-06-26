@@ -17,16 +17,21 @@ export type DelayFnOptions = {
  * @return {Promise<void>} - A promise that resolves after the specified delay, or rejects if the delay is aborted.
  */
 export async function delay(timeout: number, options?: DelayFnOptions): Promise<void> {
-    return new Promise((resolve, reject) => {
-        if (options?.signal?.aborted) {
-            reject(new BridgeSdkError('Delay aborted'));
-            return;
-        }
+    if (options?.signal?.aborted) {
+        throw new BridgeSdkError('Delay aborted');
+    }
 
-        const timeoutId = setTimeout(() => resolve(), timeout);
-        options?.signal?.addEventListener('abort', () => {
+    const { promise, resolve, reject } = Promise.withResolvers<void>();
+
+    const timeoutId = setTimeout(resolve, timeout);
+    options?.signal?.addEventListener(
+        'abort',
+        () => {
             clearTimeout(timeoutId);
             reject(new BridgeSdkError('Delay aborted'));
-        });
-    });
+        },
+        { once: true },
+    );
+
+    return promise;
 }
