@@ -114,6 +114,7 @@ export class BridgeProvider {
     public async closeConnection(): Promise<void> {
         await this.closeGateway();
         this.listener = null;
+        this.lastEventId = undefined;
         this.clients = [];
     }
 
