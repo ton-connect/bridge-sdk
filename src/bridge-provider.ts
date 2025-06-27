@@ -20,10 +20,12 @@ import { BridgeEventListener } from './models/bridge-event';
 
 export class BridgeProvider {
     private clients: ClientConnection[] = [];
+    private lastEventId?: string;
     private abortController?: AbortController;
     private gateway: BridgeGateway | null = null;
 
-    private readonly defaultOpeningDeadlineMS = 14000;
+    private readonly heartbeatMessage = 'heartbeat';
+    private readonly defaultOpeningDeadlineMS = 16000;
     private readonly defaultRetryTimeoutMS = 2000;
 
     constructor(
@@ -33,7 +35,7 @@ export class BridgeProvider {
 
     public async restoreConnection(
         clients: ClientConnection[],
-        options?: { lastEventId?: string; openingDeadlineMS?: number; signal?: AbortSignal },
+        options?: { lastEventId?: string; openingDeadlineMS?: number; signal?: AbortSignal; exponential?: boolean },
     ): Promise<void> {
         const abortController = createAbortController(options?.signal);
         this.abortController?.abort();
@@ -67,7 +69,7 @@ export class BridgeProvider {
                 attempts: Number.MAX_SAFE_INTEGER,
                 delayMs: this.defaultRetryTimeoutMS,
                 signal: abortController.signal,
-                exponential: true,
+                exponential: options?.exponential ?? true,
             },
         );
     }
@@ -136,6 +138,10 @@ export class BridgeProvider {
     }
 
     private async gatewayListener(e: MessageEvent<string>): Promise<void> {
+        if (e.data === this.heartbeatMessage) {
+            return; // TODO: reconnect if no heartbeat in 25 sec
+        }
+
         let bridgeIncomingMessage: BridgeIncomingMessage;
         try {
             bridgeIncomingMessage = JSON.parse(e.data);
@@ -154,10 +160,17 @@ export class BridgeProvider {
 
         logDebug('Bridge message received:', request);
 
+        this.lastEventId = e.lastEventId;
+
         this.listener?.({ lastEventId: e.lastEventId, ...request });
     }
 
     private async gatewayErrorsListener(e: Event): Promise<void> {
+        if (this.gateway?.isClosed) {
+            // TODO: probably will never execute
+            await this.restoreConnection(this.clients, { lastEventId: this.lastEventId, exponential: true });
+            return;
+        }
         throw new BridgeSdkError(`Bridge error ${JSON.stringify(e)}`);
     }
 

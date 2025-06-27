@@ -11,7 +11,6 @@ import { timeout } from './utils/timeout';
 export class BridgeGateway {
     private readonly ssePath = 'events';
     private readonly postPath = 'message';
-    private readonly heartbeatMessage = 'heartbeat';
     private readonly defaultTtl = 300;
 
     private eventSource = createResource(
@@ -33,17 +32,17 @@ export class BridgeGateway {
         },
     );
 
-    private get isReady(): boolean {
+    public get isReady(): boolean {
         const eventSource = this.eventSource.current();
         return eventSource?.readyState === EventSource.OPEN;
     }
 
-    private get isClosed(): boolean {
+    public get isClosed(): boolean {
         const eventSource = this.eventSource.current();
         return eventSource?.readyState !== EventSource.OPEN;
     }
 
-    private get isConnecting(): boolean {
+    public get isConnecting(): boolean {
         const eventSource = this.eventSource.current();
         return eventSource?.readyState === EventSource.CONNECTING;
     }
@@ -136,10 +135,6 @@ export class BridgeGateway {
     }
 
     private async messagesHandler(e: MessageEvent<string>): Promise<void> {
-        if (e.data === this.heartbeatMessage) {
-            return;
-        }
-
         this.listener(e);
     }
 }
@@ -227,9 +222,9 @@ async function createEventSource(config: CreateEventSourceConfig): Promise<Event
             const eventSource = new EventSource(url.toString());
 
             eventSource.onerror = async (reason: Event): Promise<void> => {
-                eventSource.close();
-                reject(new BridgeSdkError('Bridge connection aborted'));
                 if (signal?.aborted) {
+                    eventSource.close();
+                    reject(new BridgeSdkError('Bridge connection aborted'));
                     return;
                 }
 
