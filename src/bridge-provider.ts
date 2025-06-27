@@ -16,8 +16,7 @@ import { logDebug } from './utils/log';
 import { callForSuccess, RetryOptions } from './utils/call-for-success';
 import { createAbortController } from './utils/create-abort-controller';
 import { ClientConnection } from './models/client-connection';
-
-export type AppRequestListener = (e: AppRequest<RpcMethod> & { lastEventId: string }) => void;
+import { BridgeEventListener } from './models/bridge-event';
 
 export class BridgeProvider {
     private clients: ClientConnection[] = [];
@@ -31,7 +30,7 @@ export class BridgeProvider {
 
     constructor(
         private readonly bridgeUrl: string,
-        private listener: AppRequestListener | null = null,
+        private listener: BridgeEventListener | null = null,
     ) {}
 
     public async restoreConnection(
@@ -118,7 +117,7 @@ export class BridgeProvider {
         this.clients = [];
     }
 
-    public listen(callback: AppRequestListener) {
+    public listen(callback: BridgeEventListener) {
         this.listener = callback;
     }
 

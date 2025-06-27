@@ -23,3 +23,7 @@ export class BridgeSdkError<T = unknown> extends Error {
         Object.setPrototypeOf(this, BridgeSdkError.prototype);
     }
 }
+
+export function isBridgeSdkError(error: unknown): error is BridgeSdkError {
+    return error instanceof BridgeSdkError;
+}
