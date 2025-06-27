@@ -141,6 +141,7 @@ export class BridgeProvider {
         if (e.data === this.heartbeatMessage) {
             return; // TODO: reconnect if no heartbeat in 25 sec
         }
+        this.lastEventId = e.lastEventId;
 
         let bridgeIncomingMessage: BridgeIncomingMessage;
         try {
@@ -159,8 +160,6 @@ export class BridgeProvider {
         ) as AppRequest<RpcMethod>;
 
         logDebug('Bridge message received:', request);
-
-        this.lastEventId = e.lastEventId;
 
         this.listener?.({ lastEventId: e.lastEventId, ...request });
     }
