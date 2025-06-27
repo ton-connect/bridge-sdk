@@ -1,14 +1,10 @@
 import { Base64, RpcMethod } from '@tonconnect/protocol';
 
 import { BridgeSdkError } from './errors/bridge-sdk.error';
-import { BridgeIncomingMessage } from './models/bridge-incomming-message';
-import { HttpBridgeGatewayStorage } from './storage/http-bridge-gateway-storage';
-import { IStorage } from './storage/models/storage.interface';
 import { addPathToUrl } from './utils/url';
 import '@tonconnect/isomorphic-eventsource';
 import '@tonconnect/isomorphic-fetch';
-import { callForSuccess } from './utils/call-for-success';
-import { logDebug, logError } from './utils/log';
+import { logError } from './utils/log';
 import { createResource } from './utils/resource';
 import { timeout } from './utils/timeout';
 
@@ -16,10 +12,7 @@ export class BridgeGateway {
     private readonly ssePath = 'events';
     private readonly postPath = 'message';
     private readonly heartbeatMessage = 'heartbeat';
-
     private readonly defaultTtl = 300;
-    private readonly defaultReconnectDelay = 2000;
-    private readonly defaultResendDelay = 5000;
 
     private eventSource = createResource(
         async (signal?: AbortSignal, openingDeadlineMS?: number): Promise<EventSource> => {
@@ -27,11 +20,11 @@ export class BridgeGateway {
                 bridgeUrl: this.bridgeUrl,
                 ssePath: this.ssePath,
                 sessionIds: this.sessionIds,
-                bridgeGatewayStorage: this.bridgeGatewayStorage,
                 errorHandler: this.errorsHandler.bind(this),
                 messageHandler: this.messagesHandler.bind(this),
                 signal: signal,
                 openingDeadlineMS: openingDeadlineMS,
+                lastEventId: this.lastEventId,
             };
             return await createEventSource(eventSourceConfig);
         },
@@ -55,17 +48,13 @@ export class BridgeGateway {
         return eventSource?.readyState === EventSource.CONNECTING;
     }
 
-    private readonly bridgeGatewayStorage: HttpBridgeGatewayStorage;
-
     constructor(
-        storage: IStorage,
         public readonly bridgeUrl: string,
         public readonly sessionIds: string[],
-        private listener: (msg: BridgeIncomingMessage) => void,
+        private listener: (e: MessageEvent<string>) => void,
         private errorsListener: (err: Event) => void,
-    ) {
-        this.bridgeGatewayStorage = new HttpBridgeGatewayStorage(storage, bridgeUrl);
-    }
+        private readonly lastEventId?: string,
+    ) {}
 
     public async registerSession(options?: RegisterSessionOptions): Promise<void> {
         await this.eventSource.create(options?.signal, options?.openingDeadlineMS);
@@ -91,20 +80,11 @@ export class BridgeGateway {
         }
         const body = Base64.encode(message);
 
-        await callForSuccess(
-            async (options) => {
-                const response = await this.post(url, body, options.signal);
+        const response = await this.post(url, body, options?.signal);
 
-                if (!response.ok) {
-                    throw new BridgeSdkError(`Bridge send failed, status ${response.status}`);
-                }
-            },
-            {
-                attempts: options?.attempts ?? Number.MAX_SAFE_INTEGER,
-                delayMs: this.defaultResendDelay,
-                signal: options?.signal,
-            },
-        );
+        if (!response.ok) {
+            throw new BridgeSdkError(`Bridge send failed, status ${response.status}`);
+        }
     }
 
     public pause(): void {
@@ -120,7 +100,7 @@ export class BridgeGateway {
         await this.eventSource.dispose().catch((e) => logError(`Bridge close failed, ${e}`));
     }
 
-    public setListener(listener: (msg: BridgeIncomingMessage) => void): void {
+    public setListener(listener: (e: MessageEvent<string>) => void): void {
         this.listener = listener;
     }
 
@@ -142,25 +122,14 @@ export class BridgeGateway {
         return response;
     }
 
-    private async errorsHandler(eventSource: EventSource, e: Event): Promise<EventSource | void> {
-        if (this.isConnecting) {
+    private errorsHandler(eventSource: EventSource, e: Event): Promise<void> {
+        if (this.isConnecting || this.isClosed) {
             eventSource.close();
             throw new BridgeSdkError('Bridge error, failed to connect');
         }
 
         if (this.isReady) {
-            try {
-                this.errorsListener(e);
-            } catch {
-                /* empty */
-            }
-            return;
-        }
-
-        if (this.isClosed) {
-            eventSource.close();
-            logDebug(`Bridge reconnecting, ${this.defaultReconnectDelay}ms delay`);
-            return await this.eventSource.recreate(this.defaultReconnectDelay);
+            this.errorsListener(e);
         }
 
         throw new BridgeSdkError('Bridge error, unknown state');
@@ -171,19 +140,7 @@ export class BridgeGateway {
             return;
         }
 
-        await this.bridgeGatewayStorage.storeLastEventId(e.lastEventId);
-
-        if (this.isClosed) {
-            return;
-        }
-
-        let bridgeIncomingMessage: BridgeIncomingMessage;
-        try {
-            bridgeIncomingMessage = JSON.parse(e.data);
-        } catch {
-            throw new BridgeSdkError(`Bridge message parse failed, message ${e.data}`);
-        }
-        this.listener(bridgeIncomingMessage);
+        this.listener(e);
     }
 }
 
@@ -219,10 +176,6 @@ export type CreateEventSourceConfig = {
      */
     sessionIds: string[];
     /**
-     * Storage for the last event ID.
-     */
-    bridgeGatewayStorage: HttpBridgeGatewayStorage;
-    /**
      * Error handler for the event source.
      */
     errorHandler: (eventSource: EventSource, e: Event) => Promise<EventSource | void>;
@@ -238,6 +191,11 @@ export type CreateEventSourceConfig = {
      * Deadline for opening the event source.
      */
     openingDeadlineMS?: number;
+
+    /**
+     * Last event id to get events from
+     */
+    lastEventId?: string;
 };
 
 /**
@@ -257,9 +215,8 @@ async function createEventSource(config: CreateEventSourceConfig): Promise<Event
             const url = new URL(addPathToUrl(config.bridgeUrl, config.ssePath));
             url.searchParams.append('client_id', config.sessionIds.join(','));
 
-            const lastEventId = await config.bridgeGatewayStorage.getLastEventId();
-            if (lastEventId) {
-                url.searchParams.append('last_event_id', lastEventId);
+            if (config.lastEventId) {
+                url.searchParams.append('last_event_id', config.lastEventId);
             }
 
             if (signal?.aborted) {
@@ -270,21 +227,14 @@ async function createEventSource(config: CreateEventSourceConfig): Promise<Event
             const eventSource = new EventSource(url.toString());
 
             eventSource.onerror = async (reason: Event): Promise<void> => {
+                eventSource.close();
+                reject(new BridgeSdkError('Bridge connection aborted'));
                 if (signal?.aborted) {
-                    eventSource.close();
-                    reject(new BridgeSdkError('Bridge connection aborted'));
                     return;
                 }
 
                 try {
-                    const newInstance = await config.errorHandler(eventSource, reason);
-                    if (newInstance !== eventSource) {
-                        eventSource.close();
-                    }
-
-                    if (newInstance && newInstance !== eventSource) {
-                        resolve(newInstance);
-                    }
+                    await config.errorHandler(eventSource, reason);
                 } catch (e) {
                     eventSource.close();
                     reject(e);

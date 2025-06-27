@@ -43,12 +43,12 @@ export function createResource<T extends EventSource, Args extends unknown[]>(
     let currentResource: T | null = null;
     let currentArgs: Args | null = null;
     let currentPromise: Promise<T> | null = null;
-    let currentSignal: AbortSignal | null = null;
+    let currentSignal: AbortSignal | undefined = undefined;
     let abortController: AbortController | null = null;
 
     // create a new resource
     const create = async (signal?: AbortSignal, ...args: Args): Promise<T> => {
-        currentSignal = signal ?? null;
+        currentSignal = signal ?? undefined;
 
         abortController?.abort();
         abortController = createAbortController(signal);
@@ -88,7 +88,7 @@ export function createResource<T extends EventSource, Args extends unknown[]>(
 
             try {
                 abortController?.abort();
-            } catch (_) {
+            } catch {
                 /* empty */
             }
 
@@ -96,7 +96,7 @@ export function createResource<T extends EventSource, Args extends unknown[]>(
                 resource ? disposeFn(resource) : Promise.resolve(),
                 promise ? disposeFn(await promise) : Promise.resolve(),
             ]);
-        } catch (_) {
+        } catch {
             /* empty */
         }
     };
@@ -108,7 +108,7 @@ export function createResource<T extends EventSource, Args extends unknown[]>(
         const args = currentArgs;
         const signal = currentSignal;
 
-        await delay(delayMs);
+        await delay(delayMs, { signal });
 
         if (
             resource === currentResource &&

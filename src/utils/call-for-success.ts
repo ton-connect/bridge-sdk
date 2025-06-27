@@ -1,6 +1,25 @@
 import { delay } from './delay';
 import { BridgeSdkError } from '../errors/bridge-sdk.error';
 
+export type RetryOptions = {
+    /**
+     * The number of attempts to make before giving up. Default is 20.
+     */
+    attempts?: number;
+
+    /**
+     * The delay in milliseconds. If exponential strategy used it doubles every failure. Default is 100ms.
+     */
+    delayMs?: number;
+
+    /**
+     * Whether to use exponential backoff for retry delays.
+     * If true, the delay doubles after each failed attempt (e.g., 100ms, 200ms, 400ms...).
+     * If false or omitted, the delay remains constant across all attempts.
+     */
+    exponential?: boolean;
+};
+
 /**
  * Configuration options for the callForSuccess function.
  */
@@ -9,17 +28,7 @@ export type CallForSuccessOptions = {
      * An 'AbortSignal' object that can be used to abort the function.
      */
     signal?: AbortSignal;
-
-    /**
-     * The number of attempts to make before giving up. Default is 20.
-     */
-    attempts?: number;
-
-    /**
-     * The delay in milliseconds between each attempt. Default is 100ms.
-     */
-    delayMs?: number;
-};
+} & RetryOptions;
 
 /**
  * Function to call ton api until we get response.
@@ -31,7 +40,7 @@ export async function callForSuccess<T extends (options: { signal?: AbortSignal 
     fn: T,
     options?: CallForSuccessOptions,
 ): Promise<Awaited<ReturnType<T>>> {
-    const { signal, attempts = 10, delayMs = 200 } = options ?? {};
+    let { signal, attempts = 10, delayMs = 100 } = options ?? {};
 
     if (typeof fn !== 'function') {
         throw new BridgeSdkError(`Expected a function, got ${typeof fn}`);
@@ -53,6 +62,9 @@ export async function callForSuccess<T extends (options: { signal?: AbortSignal 
 
             if (i < attempts) {
                 await delay(delayMs);
+                if (options?.exponential) {
+                    delayMs *= 2;
+                }
             }
         }
     }

@@ -2,136 +2,42 @@ import {
     AppRequest,
     Base64,
     ConnectEvent,
-    ConnectEventSuccess,
-    ConnectRequest,
     DisconnectEvent,
     hexToByteArray,
     RpcMethod,
     SessionCrypto,
-    TonAddressItemReply,
-    WalletEvent,
-    WalletMessage,
     WalletResponse,
 } from '@tonconnect/protocol';
 
 import { BridgeSdkError } from './errors/bridge-sdk.error';
 import { BridgeGateway } from './bridge-gateway';
-import { BridgeIncomingMessage } from './models/bridge/bridge-incomming-message';
-import { IStorage } from './storage/models/storage.interface';
-import { WithoutId, WithoutIdDistributive } from './utils/types';
-import { logDebug, logError } from './utils/log';
-import { callForSuccess } from './utils/call-for-success';
+import { BridgeIncomingMessage } from './models/bridge-incomming-message';
+import { logDebug } from './utils/log';
+import { callForSuccess, RetryOptions } from './utils/call-for-success';
 import { createAbortController } from './utils/create-abort-controller';
-import { anySignal } from './utils/any-signal';
-import { ClientConnectionStorage } from './storage/client-connection-storage';
-import { ClientConnection } from './models/bridge/client-connection';
+import { ClientConnection } from './models/client-connection';
 
-type AppRequestListener = (e: AppRequest<RpcMethod>) => void;
+export type AppRequestListener = (e: AppRequest<RpcMethod> & { lastEventId: string }) => void;
 
 export class BridgeProvider {
-    private readonly connectionStorage: ClientConnectionStorage;
-
     private clients: ClientConnection[] = [];
-
-    get sessions() {
-        return this.clients.map((client) => client.session);
-    }
 
     private gateway: BridgeGateway | null = null;
 
-    private listeners: AppRequestListener[] = [];
-
-    private readonly defaultOpeningDeadlineMS = 12000;
-
+    private readonly defaultOpeningDeadlineMS = 14000;
     private readonly defaultRetryTimeoutMS = 2000;
 
     private abortController?: AbortController;
 
     constructor(
-        private readonly storage: IStorage,
         private readonly bridgeUrl: string,
-    ) {
-        this.connectionStorage = new ClientConnectionStorage(storage);
-    }
+        private listener: AppRequestListener | null = null,
+    ) {}
 
-    public toggleClientConnection(
-        sessionCrypto: SessionCrypto,
-        client: SessionCrypto,
-        event: WithoutIdDistributive<ConnectEventSuccess | DisconnectEvent>,
-        options?: { openingDeadlineMS?: number; signal?: AbortSignal },
-    ): void {
-        const abortController = createAbortController(options?.signal);
-        this.abortController?.abort();
-        this.abortController = abortController;
-        this.closeGateway();
-
-        callForSuccess(
-            (_options) =>
-                this.sendEvent(event, sessionCrypto, client.sessionId, {
-                    signal: _options?.signal,
-                }),
-            {
-                attempts: Number.MAX_SAFE_INTEGER,
-                delayMs: this.defaultRetryTimeoutMS,
-                signal: abortController.signal,
-            },
-        ).then(async () => {
-            if (abortController.signal.aborted) {
-                return;
-            }
-
-            if (event.event === 'connect') {
-                await this.connectionStorage.addClient({ session: client });
-            } else {
-                await this.connectionStorage.removeClient(client.sessionId);
-            }
-
-            if (abortController.signal.aborted) {
-                return;
-            }
-
-            await callForSuccess(
-                (_options) =>
-                    this.openGateway(this.sessions, {
-                        openingDeadlineMS: options?.openingDeadlineMS ?? this.defaultOpeningDeadlineMS,
-                        signal: _options?.signal,
-                    }),
-                {
-                    attempts: Number.MAX_SAFE_INTEGER,
-                    delayMs: this.defaultRetryTimeoutMS,
-                    signal: abortController.signal,
-                },
-            );
-        });
-    }
-
-    public async removeClient(
-        clientSessionId: string,
-        options?: {
-            openingDeadlineMS?: number;
-            signal?: AbortSignal;
-        },
+    public async restoreConnection(
+        clients: ClientConnection[],
+        options?: { lastEventId?: string; openingDeadlineMS?: number; signal?: AbortSignal },
     ): Promise<void> {
-        await this.connectionStorage.removeClient(clientSessionId);
-        if (options?.signal?.aborted) {
-            return;
-        }
-
-        await callForSuccess(
-            (_options) =>
-                this.openGateway(this.sessions, {
-                    openingDeadlineMS: options?.openingDeadlineMS ?? this.defaultOpeningDeadlineMS,
-                    signal: _options?.signal,
-                }),
-            {
-                attempts: Number.MAX_SAFE_INTEGER,
-                delayMs: this.defaultRetryTimeoutMS,
-                signal: options?.signal,
-            },
-        );
-    }
-
-    public async restoreConnection(options?: { openingDeadlineMS?: number; signal?: AbortSignal }): Promise<void> {
         const abortController = createAbortController(options?.signal);
         this.abortController?.abort();
         this.abortController = abortController;
@@ -141,86 +47,41 @@ export class BridgeProvider {
         }
 
         this.closeGateway();
-        const storedClients = await this.connectionStorage.getClients();
-        if (!storedClients.clients.length) {
-            return;
-        }
 
         if (abortController.signal.aborted) {
             return;
         }
 
         const openingDeadlineMS = options?.openingDeadlineMS ?? this.defaultOpeningDeadlineMS;
-        this.clients = storedClients.clients;
+        this.clients = clients;
 
-        if (this.gateway) {
-            logDebug('Gateway is already opened, closing previous gateway');
-            await this.gateway.close();
-        }
-
-        this.gateway = new BridgeGateway(
-            this.storage,
-            this.bridgeUrl,
-            this.sessions.map((session) => session.sessionId),
-            this.gatewayListener.bind(this),
-            this.gatewayErrorsListener.bind(this),
-        );
-
-        if (abortController.signal.aborted) {
-            return;
-        }
-
-        // wait for the connection to be opened
+        // wait for the connection to be opened till abort signal
         await callForSuccess(
-            (options) =>
-                this.gateway!.registerSession({
-                    openingDeadlineMS: openingDeadlineMS,
-                    signal: options.signal,
-                }),
+            ({ signal }) =>
+                this.openGateway(
+                    this.clients.map((client) => client.session),
+                    {
+                        lastEventId: options?.lastEventId,
+                        openingDeadlineMS: openingDeadlineMS,
+                        signal,
+                    },
+                ),
             {
                 attempts: Number.MAX_SAFE_INTEGER,
                 delayMs: this.defaultRetryTimeoutMS,
                 signal: abortController.signal,
+                exponential: true,
             },
         );
     }
 
-    public async sendEvent(
-        event: WithoutIdDistributive<ConnectEvent | DisconnectEvent>,
-        session: SessionCrypto,
-        clientSessionId: string,
-        options?: {
-            attempts?: number;
-            signal?: AbortSignal;
-        },
-    ) {
-        if (options?.signal?.aborted) {
-            return;
-        }
-
-        const nextEventId = await this.connectionStorage.getClientNextEventId(clientSessionId);
-
-        if (options?.signal?.aborted) {
-            return;
-        }
-
-        await this.connectionStorage.incrementClientNextEventId(clientSessionId);
-
-        if (options?.signal?.aborted) {
-            return;
-        }
-
-        return await this.sendResponse({ ...event, id: nextEventId }, session, clientSessionId, options);
-    }
-
-    public async sendResponse<T extends RpcMethod>(
+    public async send<T extends RpcMethod>(
         response: WalletResponse<T> | ConnectEvent | DisconnectEvent,
         session: SessionCrypto,
         clientSessionId: string,
         options?: {
-            attempts?: number;
             signal?: AbortSignal;
-        },
+        } & RetryOptions,
     ): Promise<void> {
         if (!this.gateway) {
             throw new BridgeSdkError('Trying to send bridge request without session');
@@ -236,31 +97,29 @@ export class BridgeProvider {
             return;
         }
 
-        await this.gateway.send(encodedRequest, session.sessionId, clientSessionId, {
-            attempts: options?.attempts,
-            signal: options?.signal,
-        });
+        await callForSuccess(
+            async ({ signal }) => {
+                await this.gateway?.send(encodedRequest, session.sessionId, clientSessionId, {
+                    attempts: options?.attempts,
+                    signal,
+                });
+            },
+            {
+                attempts: options?.attempts ?? Number.MAX_SAFE_INTEGER,
+                delayMs: options?.delayMs ?? this.defaultRetryTimeoutMS,
+                signal: options?.signal,
+            },
+        );
     }
 
     public closeConnection(): void {
         this.closeGateway();
-        this.listeners = [];
+        this.listener = null;
         this.clients = [];
-        this.gateway = null;
     }
 
-    public async getClient(clientId: string): Promise<ClientConnection> {
-        const connection = await this.connectionStorage.getClient(clientId);
-        if (!connection) {
-            throw new BridgeSdkError('Client not found');
-        }
-
-        return connection;
-    }
-
-    public listen(callback: AppRequestListener): () => void {
-        this.listeners.push(callback);
-        return () => (this.listeners = this.listeners.filter((listener) => listener !== callback));
+    public listen(callback: AppRequestListener) {
+        this.listener = callback;
     }
 
     public pause(): void {
@@ -272,14 +131,21 @@ export class BridgeProvider {
     }
 
     public getCryptoSession(clientSessionId: string) {
-        const session = this.sessions.find((session) => session.sessionId === clientSessionId);
-        if (!session) {
+        const client = this.clients.find(({ session }) => session.sessionId === clientSessionId);
+        if (!client) {
             throw new BridgeSdkError('Client session does not exist');
         }
-        return session;
+        return client.session;
     }
 
-    private async gatewayListener(bridgeIncomingMessage: BridgeIncomingMessage): Promise<void> {
+    private async gatewayListener(e: MessageEvent<string>): Promise<void> {
+        let bridgeIncomingMessage: BridgeIncomingMessage;
+        try {
+            bridgeIncomingMessage = JSON.parse(e.data);
+        } catch {
+            throw new BridgeSdkError(`Bridge message parse failed, message ${e.data}`);
+        }
+
         const sessionCrypto = this.getCryptoSession(bridgeIncomingMessage.from);
 
         const request = JSON.parse(
@@ -291,14 +157,7 @@ export class BridgeProvider {
 
         logDebug('Bridge message received:', request);
 
-        const listeners = this.listeners;
-
-        if (request.method === 'disconnect') {
-            logDebug(`Removing bridge and session: received disconnect event`);
-            await this.removeClient(bridgeIncomingMessage.from);
-        }
-
-        listeners.forEach((listener) => listener(request));
+        this.listener?.({ lastEventId: e.lastEventId, ...request });
     }
 
     private async gatewayErrorsListener(e: Event): Promise<void> {
@@ -308,6 +167,7 @@ export class BridgeProvider {
     private async openGateway(
         sessions: SessionCrypto[],
         options?: {
+            lastEventId?: string;
             openingDeadlineMS?: number;
             signal?: AbortSignal;
         },
@@ -317,12 +177,16 @@ export class BridgeProvider {
             await this.gateway.close();
         }
 
+        if (options?.signal?.aborted) {
+            return;
+        }
+
         this.gateway = new BridgeGateway(
-            this.storage,
             this.bridgeUrl,
             sessions.map(({ sessionId }) => sessionId),
             this.gatewayListener.bind(this),
             this.gatewayErrorsListener.bind(this),
+            options?.lastEventId,
         );
 
         return await this.gateway.registerSession({
