@@ -166,7 +166,7 @@ export class BridgeProvider {
     }
 
     private async gatewayErrorsListener(e: Event): Promise<void> {
-        if (this.gateway?.isClosed) {
+        if (this.gateway?.isClosed || this.gateway?.isConnecting) {
             // TODO: probably will never execute
             await this.restoreConnection(this.clients, { lastEventId: this.lastEventId, exponential: true });
             return;
@@ -191,18 +191,17 @@ export class BridgeProvider {
             return;
         }
 
-        this.gateway = new BridgeGateway(
+        this.gateway = await BridgeGateway.open(
             this.bridgeUrl,
             sessions.map(({ sessionId }) => sessionId),
             this.gatewayListener.bind(this),
             this.gatewayErrorsListener.bind(this),
             options?.lastEventId,
+            {
+                openingDeadlineMS: options?.openingDeadlineMS,
+                signal: options?.signal,
+            },
         );
-
-        return await this.gateway.registerSession({
-            openingDeadlineMS: options?.openingDeadlineMS,
-            signal: options?.signal,
-        });
     }
 
     private async closeGateway(): Promise<void> {

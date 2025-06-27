@@ -47,7 +47,7 @@ export class BridgeGateway {
         return eventSource?.readyState === EventSource.CONNECTING;
     }
 
-    constructor(
+    private constructor(
         public readonly bridgeUrl: string,
         public readonly sessionIds: string[],
         private listener: (e: MessageEvent<string>) => void,
@@ -55,7 +55,25 @@ export class BridgeGateway {
         private readonly lastEventId?: string,
     ) {}
 
-    public async registerSession(options?: RegisterSessionOptions): Promise<void> {
+    static async open(
+        bridgeUrl: string,
+        sessionIds: string[],
+        listener: (e: MessageEvent<string>) => void,
+        errorsListener: (err: Event) => void,
+        lastEventId?: string,
+        options?: RegisterSessionOptions,
+    ) {
+        const bridgeGateway = new BridgeGateway(bridgeUrl, sessionIds, listener, errorsListener, lastEventId);
+        try {
+            await bridgeGateway.registerSession(options);
+            return bridgeGateway;
+        } catch (error: unknown) {
+            await bridgeGateway.close();
+            throw error;
+        }
+    }
+
+    private async registerSession(options?: RegisterSessionOptions): Promise<void> {
         await this.eventSource.create(options?.signal, options?.openingDeadlineMS);
     }
 
@@ -121,17 +139,8 @@ export class BridgeGateway {
         return response;
     }
 
-    private errorsHandler(eventSource: EventSource, e: Event): Promise<void> {
-        if (this.isConnecting || this.isClosed) {
-            eventSource.close();
-            throw new BridgeSdkError('Bridge error, failed to connect');
-        }
-
-        if (this.isReady) {
-            this.errorsListener(e);
-        }
-
-        throw new BridgeSdkError('Bridge error, unknown state');
+    private async errorsHandler(eventSource: EventSource, e: Event): Promise<void> {
+        this.errorsListener(e);
     }
 
     private async messagesHandler(e: MessageEvent<string>): Promise<void> {
@@ -198,6 +207,8 @@ export type CreateEventSourceConfig = {
  * @param {CreateEventSourceConfig} config - Configuration for creating an event source.
  */
 async function createEventSource(config: CreateEventSourceConfig): Promise<EventSource> {
+    let lastEventId = config.lastEventId;
+
     return await timeout(
         async (resolve, reject, deferOptions) => {
             const { signal } = deferOptions;
@@ -210,8 +221,8 @@ async function createEventSource(config: CreateEventSourceConfig): Promise<Event
             const url = new URL(addPathToUrl(config.bridgeUrl, config.ssePath));
             url.searchParams.append('client_id', config.sessionIds.join(','));
 
-            if (config.lastEventId) {
-                url.searchParams.append('last_event_id', config.lastEventId);
+            if (lastEventId) {
+                url.searchParams.append('last_event_id', lastEventId);
             }
 
             if (signal?.aborted) {
@@ -244,11 +255,14 @@ async function createEventSource(config: CreateEventSourceConfig): Promise<Event
                 resolve(eventSource);
             };
             eventSource.onmessage = (event: MessageEvent<string>): void => {
+                lastEventId = event.lastEventId;
+
                 if (signal?.aborted) {
                     eventSource.close();
                     reject(new BridgeSdkError('Bridge connection aborted'));
                     return;
                 }
+
                 config.messageHandler(event);
             };
 
