@@ -20,13 +20,11 @@ import { BridgeEventListener } from './models/bridge-event';
 
 export class BridgeProvider {
     private clients: ClientConnection[] = [];
-
+    private abortController?: AbortController;
     private gateway: BridgeGateway | null = null;
 
     private readonly defaultOpeningDeadlineMS = 14000;
     private readonly defaultRetryTimeoutMS = 2000;
-
-    private abortController?: AbortController;
 
     constructor(
         private readonly bridgeUrl: string,
@@ -45,7 +43,7 @@ export class BridgeProvider {
             return;
         }
 
-        this.closeGateway();
+        await this.closeGateway();
 
         if (abortController.signal.aborted) {
             return;
@@ -111,8 +109,8 @@ export class BridgeProvider {
         );
     }
 
-    public closeConnection(): void {
-        this.closeGateway();
+    public async closeConnection(): Promise<void> {
+        await this.closeGateway();
         this.listener = null;
         this.clients = [];
     }
@@ -121,8 +119,8 @@ export class BridgeProvider {
         this.listener = callback;
     }
 
-    public pause(): void {
-        this.gateway?.pause();
+    public async pause(): Promise<void> {
+        await this.gateway?.pause();
     }
 
     public async unPause(): Promise<void> {
@@ -194,8 +192,8 @@ export class BridgeProvider {
         });
     }
 
-    private closeGateway(): void {
-        this.gateway?.close();
+    private async closeGateway(): Promise<void> {
+        await this.gateway?.close();
         this.gateway = null;
     }
 }

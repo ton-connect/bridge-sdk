@@ -87,8 +87,8 @@ export class BridgeGateway {
         }
     }
 
-    public pause(): void {
-        this.eventSource.dispose().catch((e) => logError(`Bridge pause failed, ${e}`));
+    public async pause(): Promise<void> {
+        await this.eventSource.dispose().catch((e) => logError(`Bridge pause failed, ${e}`));
     }
 
     public async unPause(): Promise<void> {
