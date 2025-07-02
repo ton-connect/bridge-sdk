@@ -191,17 +191,17 @@ export class BridgeProvider {
             return;
         }
 
-        this.gateway = await BridgeGateway.open(
-            this.bridgeUrl,
-            sessions.map(({ sessionId }) => sessionId),
-            this.gatewayListener.bind(this),
-            this.gatewayErrorsListener.bind(this),
-            options?.lastEventId,
-            {
+        this.gateway = await BridgeGateway.open({
+            bridgeUrl: this.bridgeUrl,
+            sessionIds: sessions.map(({ sessionId }) => sessionId),
+            listener: this.gatewayListener.bind(this),
+            errorsListener: this.gatewayErrorsListener.bind(this),
+            lastEventId: this.lastEventId,
+            options: {
                 openingDeadlineMS: options?.openingDeadlineMS,
                 signal: options?.signal,
             },
-        );
+        });
     }
 
     private async closeGateway(): Promise<void> {

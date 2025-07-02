@@ -8,6 +8,15 @@ import { logError } from './utils/log';
 import { createResource } from './utils/resource';
 import { timeout } from './utils/timeout';
 
+export type BridgeOpenParams = {
+    bridgeUrl: string;
+    sessionIds: string[];
+    listener: (e: MessageEvent<string>) => void;
+    errorsListener: (err: Event) => void;
+    lastEventId?: string;
+    options?: RegisterSessionOptions;
+};
+
 export class BridgeGateway {
     private readonly ssePath = 'events';
     private readonly postPath = 'message';
@@ -55,17 +64,16 @@ export class BridgeGateway {
         private readonly lastEventId?: string,
     ) {}
 
-    static async open(
-        bridgeUrl: string,
-        sessionIds: string[],
-        listener: (e: MessageEvent<string>) => void,
-        errorsListener: (err: Event) => void,
-        lastEventId?: string,
-        options?: RegisterSessionOptions,
-    ) {
-        const bridgeGateway = new BridgeGateway(bridgeUrl, sessionIds, listener, errorsListener, lastEventId);
+    static async open(params: BridgeOpenParams) {
+        const bridgeGateway = new BridgeGateway(
+            params.bridgeUrl,
+            params.sessionIds,
+            params.listener,
+            params.errorsListener,
+            params.lastEventId,
+        );
         try {
-            await bridgeGateway.registerSession(options);
+            await bridgeGateway.registerSession(params.options);
             return bridgeGateway;
         } catch (error: unknown) {
             await bridgeGateway.close();
@@ -91,7 +99,7 @@ export class BridgeGateway {
         const url = new URL(addPathToUrl(this.bridgeUrl, this.postPath));
         url.searchParams.append('client_id', from);
         url.searchParams.append('to', receiver);
-        url.searchParams.append('ttl', (options?.ttl || this.defaultTtl).toString());
+        url.searchParams.append('ttl', (options?.ttl ?? this.defaultTtl).toString());
         if (options?.topic) {
             url.searchParams.append('topic', options.topic);
         }
