@@ -30,7 +30,9 @@ describe('BridgeProvider', () => {
         });
         providers.push(wallet);
 
-        await app.send({ method: 'sendTransaction', params: [''], id: '1' }, appSession, walletSession.sessionId);
+        await app.send({ method: 'sendTransaction', params: [''], id: '1' }, appSession, walletSession.sessionId, {
+            attempts: 3,
+        });
 
         const result = await promise;
         expect(result).toMatchObject({ method: 'sendTransaction', params: [''], id: '1' });
@@ -56,7 +58,9 @@ describe('BridgeProvider', () => {
         });
         providers.push(wallet);
 
-        await app.send({ method: 'sendTransaction', params: ['abc'], id: '1' }, appSession, walletSession.sessionId);
+        await app.send({ method: 'sendTransaction', params: ['abc'], id: '1' }, appSession, walletSession.sessionId, {
+            attempts: 3,
+        });
 
         const result = await promise;
         expect(result).toMatchObject({ method: 'sendTransaction', params: ['abc'], id: '1' });
@@ -76,7 +80,9 @@ describe('BridgeProvider', () => {
             { session: app2Session, clientId: wallet2Session.sessionId },
         ]);
 
-        await app.send({ method: 'disconnect', params: [], id: '2' }, app2Session, wallet2Session.sessionId);
+        await app.send({ method: 'disconnect', params: [], id: '2' }, app2Session, wallet2Session.sessionId, {
+            attempts: 3,
+        });
 
         const result2 = await res2.promise;
         expect(result2).toMatchObject({ method: 'disconnect', params: [], id: '2' });

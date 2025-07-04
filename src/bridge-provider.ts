@@ -122,7 +122,6 @@ export class BridgeProvider<TConsumer extends BridgeProviderConsumer> {
         await callForSuccess(
             async ({ signal }) => {
                 await this.gateway?.send(encodedRequest, session.sessionId, clientSessionId, {
-                    attempts: options?.attempts,
                     signal,
                 });
             },

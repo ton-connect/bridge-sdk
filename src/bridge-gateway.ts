@@ -93,7 +93,6 @@ export class BridgeGateway {
             topic?: RpcMethod;
             ttl?: number;
             signal?: AbortSignal;
-            attempts?: number;
         },
     ): Promise<void> {
         const url = new URL(addPathToUrl(this.bridgeUrl, this.postPath));
