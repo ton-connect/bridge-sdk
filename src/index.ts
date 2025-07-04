@@ -1,6 +1,19 @@
 export { BridgeSdkError, isBridgeSdkError } from './errors/bridge-sdk.error';
 
-export { BridgeEvent, BridgeEventListener } from './models/bridge-event';
+export {
+    AppConsumer,
+    WalletConsumer,
+    WalletMessage,
+    AppMessage,
+    BridgeIncomingMessage,
+    BridgeAppEventListener,
+    BridgeWalletEventListener,
+    BridgeEventListeners,
+    BridgeProviderConsumer,
+    BridgeAppEvent,
+    BridgeWalletEvent,
+    BridgeMessages,
+} from './models/bridge-messages';
 export { ClientConnection } from './models/client-connection';
 
 export { BridgeGateway } from './bridge-gateway';

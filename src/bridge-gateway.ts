@@ -8,7 +8,7 @@ import { logError } from './utils/log';
 import { createResource } from './utils/resource';
 import { timeout } from './utils/timeout';
 
-export type BridgeOpenParams = {
+export type BridgeGatewayOpenParams = {
     bridgeUrl: string;
     sessionIds: string[];
     listener: (e: MessageEvent<string>) => void;
@@ -64,7 +64,7 @@ export class BridgeGateway {
         private readonly lastEventId?: string,
     ) {}
 
-    static async open(params: BridgeOpenParams) {
+    static async open(params: BridgeGatewayOpenParams) {
         const bridgeGateway = new BridgeGateway(
             params.bridgeUrl,
             params.sessionIds,

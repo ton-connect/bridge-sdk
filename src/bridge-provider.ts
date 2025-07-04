@@ -1,24 +1,26 @@
-import {
-    AppRequest,
-    Base64,
-    ConnectEvent,
-    DisconnectEvent,
-    hexToByteArray,
-    RpcMethod,
-    SessionCrypto,
-    WalletResponse,
-} from '@tonconnect/protocol';
+import { Base64, hexToByteArray, RpcMethod, SessionCrypto } from '@tonconnect/protocol';
 
 import { BridgeSdkError } from './errors/bridge-sdk.error';
 import { BridgeGateway } from './bridge-gateway';
-import { BridgeIncomingMessage } from './models/bridge-incomming-message';
 import { logDebug } from './utils/log';
 import { callForSuccess, RetryOptions } from './utils/call-for-success';
 import { createAbortController } from './utils/create-abort-controller';
 import { ClientConnection } from './models/client-connection';
-import { BridgeEventListener } from './models/bridge-event';
+import {
+    BridgeEventListeners,
+    BridgeMessages,
+    BridgeProviderConsumer,
+    BridgeIncomingMessage,
+} from './models/bridge-messages';
 
-export class BridgeProvider {
+export type BridgeProviderOpenParams<TConsumer extends BridgeProviderConsumer> = {
+    bridgeUrl: string;
+    clients: ClientConnection[];
+    listener?: BridgeEventListeners[TConsumer];
+    options?: { lastEventId?: string; openingDeadlineMS?: number; signal?: AbortSignal; exponential?: boolean };
+};
+
+export class BridgeProvider<TConsumer extends BridgeProviderConsumer> {
     private clients: ClientConnection[] = [];
     private lastEventId?: string;
     private abortController?: AbortController;
@@ -28,10 +30,31 @@ export class BridgeProvider {
     private readonly defaultOpeningDeadlineMS = 16000;
     private readonly defaultRetryTimeoutMS = 2000;
 
+    static async open<TConsumer extends BridgeProviderConsumer = 'wallet'>(
+        params: BridgeProviderOpenParams<TConsumer>,
+    ): Promise<BridgeProvider<TConsumer>> {
+        const provider = new BridgeProvider<TConsumer>(params.bridgeUrl, params.listener);
+        try {
+            await provider.restoreConnection(params.clients, params.options);
+            return provider;
+        } catch (err: unknown) {
+            await provider.close();
+            throw err;
+        }
+    }
+
     constructor(
         private readonly bridgeUrl: string,
-        private listener: BridgeEventListener | null = null,
+        private listener: BridgeEventListeners[TConsumer] | null = null,
     ) {}
+
+    public get isReady(): boolean {
+        return this.gateway?.isReady || false;
+    }
+
+    public get isClosed(): boolean {
+        return Boolean(this.gateway) && this.gateway!.isClosed;
+    }
 
     public async restoreConnection(
         clients: ClientConnection[],
@@ -74,8 +97,8 @@ export class BridgeProvider {
         );
     }
 
-    public async send<T extends RpcMethod>(
-        response: WalletResponse<T> | ConnectEvent | DisconnectEvent,
+    public async send<TMethod extends RpcMethod>(
+        message: BridgeMessages<TMethod>[TConsumer],
         session: SessionCrypto,
         clientSessionId: string,
         options?: {
@@ -90,7 +113,7 @@ export class BridgeProvider {
             return;
         }
 
-        const encodedRequest = session.encrypt(JSON.stringify(response), hexToByteArray(clientSessionId));
+        const encodedRequest = session.encrypt(JSON.stringify(message), hexToByteArray(clientSessionId));
 
         if (options?.signal?.aborted) {
             return;
@@ -111,14 +134,14 @@ export class BridgeProvider {
         );
     }
 
-    public async closeConnection(): Promise<void> {
+    public async close(): Promise<void> {
         await this.closeGateway();
         this.listener = null;
         this.lastEventId = undefined;
         this.clients = [];
     }
 
-    public listen(callback: BridgeEventListener) {
+    public listen(callback: BridgeEventListeners[TConsumer]) {
         this.listener = callback;
     }
 
@@ -131,7 +154,7 @@ export class BridgeProvider {
     }
 
     public getCryptoSession(clientSessionId: string) {
-        const client = this.clients.find(({ session }) => session.sessionId === clientSessionId);
+        const client = this.clients.find(({ clientId }) => clientId === clientSessionId);
         if (!client) {
             throw new BridgeSdkError('Client session does not exist');
         }
@@ -158,7 +181,7 @@ export class BridgeProvider {
                 Base64.decode(bridgeIncomingMessage.message).toUint8Array(),
                 hexToByteArray(bridgeIncomingMessage.from),
             ),
-        ) as AppRequest<RpcMethod>;
+        );
 
         logDebug('Bridge message received:', request);
 
