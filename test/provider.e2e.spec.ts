@@ -2,7 +2,7 @@ import { SessionCrypto } from '@tonconnect/protocol';
 
 import { AppConsumer, WalletConsumer, BridgeProvider, BridgeProviderConsumer } from '../src';
 
-const BRIDGE_URL = 'https://walletbot.me/tonconnect-bridge/bridge';
+const BRIDGE_URL = process.env.BRIDGE_URL || 'https://walletbot.me/tonconnect-bridge/bridge';
 
 describe('BridgeProvider', () => {
     let providers: BridgeProvider<BridgeProviderConsumer>[] = [];
