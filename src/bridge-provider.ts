@@ -130,7 +130,7 @@ export class BridgeProvider<TConsumer extends BridgeProviderConsumer> {
 
         await callForSuccess(
             async ({ signal }) => {
-                await this.gateway?.send(encodedRequest, session.sessionId, clientSessionId, {
+                await this.gateway!.send(encodedRequest, session.sessionId, clientSessionId, {
                     signal,
                     ttl: options?.ttl,
                 });
@@ -223,16 +223,17 @@ export class BridgeProvider<TConsumer extends BridgeProviderConsumer> {
             return;
         }
 
-        this.gateway = await BridgeGateway.open({
-            bridgeUrl: this.bridgeUrl,
-            sessionIds: distinct(sessions.map(({ sessionId }) => sessionId)),
-            listener: this.gatewayListener.bind(this),
-            errorsListener: this.gatewayErrorsListener.bind(this),
-            lastEventId: this.lastEventId,
-            options: {
-                openingDeadlineMS: options?.openingDeadlineMS,
-                signal: options?.signal,
-            },
+        this.gateway = new BridgeGateway(
+            this.bridgeUrl,
+            distinct(sessions.map(({ sessionId }) => sessionId)),
+            this.gatewayListener.bind(this),
+            this.gatewayErrorsListener.bind(this),
+            this.lastEventId,
+        );
+
+        await this.gateway.registerSession({
+            openingDeadlineMS: options?.openingDeadlineMS,
+            signal: options?.signal,
         });
     }
 

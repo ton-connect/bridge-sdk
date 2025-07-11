@@ -56,7 +56,7 @@ export class BridgeGateway {
         return eventSource?.readyState === EventSource.CONNECTING;
     }
 
-    private constructor(
+    constructor(
         public readonly bridgeUrl: string,
         public readonly sessionIds: string[],
         private listener: (e: MessageEvent<string>) => void,
@@ -81,7 +81,7 @@ export class BridgeGateway {
         }
     }
 
-    private async registerSession(options?: RegisterSessionOptions): Promise<void> {
+    async registerSession(options?: RegisterSessionOptions): Promise<void> {
         await this.eventSource.create(options?.signal, options?.openingDeadlineMS);
     }
 
