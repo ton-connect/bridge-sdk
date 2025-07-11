@@ -67,6 +67,7 @@ export class BridgeProvider<TConsumer extends BridgeProviderConsumer> {
         clients: ClientConnection[],
         options?: { lastEventId?: string; openingDeadlineMS?: number; signal?: AbortSignal; exponential?: boolean },
     ): Promise<void> {
+        logDebug('Restoring connection...');
         const abortController = createAbortController(options?.signal);
         this.abortController?.abort();
         this.abortController = abortController;
@@ -75,6 +76,7 @@ export class BridgeProvider<TConsumer extends BridgeProviderConsumer> {
             return;
         }
 
+        logDebug('Closing previous connection...');
         await this.closeGateway();
 
         if (abortController.signal.aborted) {
@@ -216,8 +218,10 @@ export class BridgeProvider<TConsumer extends BridgeProviderConsumer> {
     ): Promise<void> {
         if (this.gateway) {
             logDebug(`Gateway is already opened, closing previous gateway`);
-            await this.gateway.close();
+            await this.closeGateway();
         }
+
+        logDebug('Opening bridge gateway...');
 
         if (options?.signal?.aborted) {
             return;
@@ -230,6 +234,8 @@ export class BridgeProvider<TConsumer extends BridgeProviderConsumer> {
             this.gatewayErrorsListener.bind(this),
             this.lastEventId,
         );
+
+        logDebug('Gateway is opened, trying connecting to bridge');
 
         await this.gateway.registerSession({
             openingDeadlineMS: options?.openingDeadlineMS,

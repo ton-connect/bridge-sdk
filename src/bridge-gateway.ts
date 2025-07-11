@@ -4,7 +4,7 @@ import { BridgeSdkError } from './errors/bridge-sdk.error';
 import { addPathToUrl } from './utils/url';
 import '@tonconnect/isomorphic-eventsource';
 import '@tonconnect/isomorphic-fetch';
-import { logError } from './utils/log';
+import { logDebug, logError } from './utils/log';
 import { createResource } from './utils/resource';
 import { timeout } from './utils/timeout';
 
@@ -220,6 +220,8 @@ async function createEventSource(config: CreateEventSourceConfig): Promise<Event
         async (resolve, reject, deferOptions) => {
             const { signal } = deferOptions;
 
+            logDebug('Connecting to bridge...');
+
             if (signal?.aborted) {
                 reject(new BridgeSdkError('Bridge connection aborted'));
                 return;
@@ -237,9 +239,13 @@ async function createEventSource(config: CreateEventSourceConfig): Promise<Event
                 return;
             }
 
+            logDebug('Creating event source...');
+
             const eventSource = new EventSource(url.toString());
 
             eventSource.onerror = async (reason: Event): Promise<void> => {
+                logError(`BridgeGateway error, ${JSON.stringify(reason)}`);
+
                 if (signal?.aborted) {
                     eventSource.close();
                     reject(new BridgeSdkError('Bridge connection aborted'));
@@ -254,6 +260,8 @@ async function createEventSource(config: CreateEventSourceConfig): Promise<Event
                 }
             };
             eventSource.onopen = (): void => {
+                logDebug('Gateway opened');
+
                 if (signal?.aborted) {
                     eventSource.close();
                     reject(new BridgeSdkError('Bridge connection aborted'));
