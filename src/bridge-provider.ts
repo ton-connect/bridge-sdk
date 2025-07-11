@@ -18,6 +18,7 @@ export type BridgeProviderOpenParams<TConsumer extends BridgeProviderConsumer> =
     bridgeUrl: string;
     clients: ClientConnection[];
     listener?: BridgeEventListeners[TConsumer];
+    errorListener?: (error: unknown) => void;
     options?: { lastEventId?: string; openingDeadlineMS?: number; signal?: AbortSignal; exponential?: boolean };
 };
 
@@ -47,10 +48,15 @@ export class BridgeProvider<TConsumer extends BridgeProviderConsumer> {
     constructor(
         private readonly bridgeUrl: string,
         private listener: BridgeEventListeners[TConsumer] | null = null,
+        private errorListener: ((error: unknown) => void) | null = null,
     ) {}
 
     public get isReady(): boolean {
         return this.gateway?.isReady || false;
+    }
+
+    public get isConnecting(): boolean {
+        return Boolean(this.gateway) && this.gateway!.isConnecting;
     }
 
     public get isClosed(): boolean {
@@ -104,6 +110,7 @@ export class BridgeProvider<TConsumer extends BridgeProviderConsumer> {
         session: SessionCrypto,
         clientSessionId: string,
         options?: {
+            ttl?: number;
             signal?: AbortSignal;
         } & RetryOptions,
     ): Promise<void> {
@@ -125,6 +132,7 @@ export class BridgeProvider<TConsumer extends BridgeProviderConsumer> {
             async ({ signal }) => {
                 await this.gateway?.send(encodedRequest, session.sessionId, clientSessionId, {
                     signal,
+                    ttl: options?.ttl,
                 });
             },
             {
@@ -186,7 +194,7 @@ export class BridgeProvider<TConsumer extends BridgeProviderConsumer> {
 
         logDebug('Bridge message received:', request);
 
-        this.listener?.({ lastEventId: e.lastEventId, ...request });
+        this.listener?.({ lastEventId: e.lastEventId, ...request, from: bridgeIncomingMessage.from });
     }
 
     private async gatewayErrorsListener(e: Event): Promise<void> {
@@ -195,7 +203,7 @@ export class BridgeProvider<TConsumer extends BridgeProviderConsumer> {
             await this.restoreConnection(this.clients, { lastEventId: this.lastEventId, exponential: true });
             return;
         }
-        throw new BridgeSdkError(`Bridge error ${JSON.stringify(e)}`);
+        this.errorListener?.(new BridgeSdkError(`Bridge error ${JSON.stringify(e)}`));
     }
 
     private async openGateway(

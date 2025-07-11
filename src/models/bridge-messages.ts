@@ -1,7 +1,7 @@
 import { AppRequest, ConnectEvent, DisconnectEvent, RpcMethod, WalletResponse } from '@tonconnect/protocol';
 
-export type BridgeAppEvent = AppRequest<RpcMethod> & { lastEventId: string };
-export type BridgeWalletEvent = WalletResponse<RpcMethod> & { lastEventId: string };
+export type BridgeAppEvent = AppRequest<RpcMethod> & { lastEventId: string; from: string };
+export type BridgeWalletEvent = WalletResponse<RpcMethod> & { lastEventId: string; from: string };
 
 export type AppMessage<T extends RpcMethod> = AppRequest<T>;
 export type WalletMessage<T extends RpcMethod> = WalletResponse<T> | ConnectEvent | DisconnectEvent;
