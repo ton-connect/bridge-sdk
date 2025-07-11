@@ -1,6 +1,6 @@
 {
   "name": "bridge-sdk",
-  "version": "0.1.2",
+  "version": "0.1.3",
   "main": "dist/index.js",
   "module": "./dist/index.js",
   "types": "./dist/index.d.ts",
@@ -14,11 +14,13 @@
   "scripts": {
     "lint": "eslint . --max-warnings 0",
     "lint:fix": "eslint . --max-warnings 0 --fix",
-    "build": "tsup src/index.ts --dts --format esm,cjs --out-dir dist",
+    "build": "rm -rf dist && tsc",
     "clean": "rm -rf dist",
     "test": "jest"
   },
   "dependencies": {
+    "@tonconnect/isomorphic-eventsource": "^0.0.2",
+    "@tonconnect/isomorphic-fetch": "^0.0.3",
     "@tonconnect/protocol": "^2.3.0",
     "axios": "^1.10.0"
   },
@@ -30,9 +32,7 @@
     "eslint": "^9.30.1",
     "globals": "^16.3.0",
     "jest": "^30.0.4",
-    "jiti": "^2.4.2",
     "ts-jest": "^29.4.0",
-    "tsup": "^8.5.0",
     "typescript": "^5.8.3"
   }
 }
