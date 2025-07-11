@@ -2,7 +2,7 @@ import { Base64, hexToByteArray, RpcMethod, SessionCrypto } from '@tonconnect/pr
 
 import { BridgeSdkError } from './errors/bridge-sdk.error';
 import { BridgeGateway } from './bridge-gateway';
-import { logDebug } from './utils/log';
+import { logDebug, logError } from './utils/log';
 import { callForSuccess, RetryOptions } from './utils/call-for-success';
 import { createAbortController } from './utils/create-abort-controller';
 import { ClientConnection } from './models/client-connection';
@@ -202,6 +202,7 @@ export class BridgeProvider<TConsumer extends BridgeProviderConsumer> {
     private async gatewayErrorsListener(e: Event): Promise<void> {
         if (this.gateway?.isClosed || this.gateway?.isConnecting) {
             // TODO: probably will never execute
+            logError(`ERROR gatewayErrorsListener, ${JSON.stringify(e)}`, e);
             await this.restoreConnection(this.clients, { lastEventId: this.lastEventId, exponential: true });
             return;
         }

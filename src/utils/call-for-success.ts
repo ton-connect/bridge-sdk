@@ -1,5 +1,6 @@
 import { delay } from './delay';
 import { BridgeSdkError } from '../errors/bridge-sdk.error';
+import { logDebug } from './log';
 
 export type RetryOptions = {
     /**
@@ -50,6 +51,7 @@ export async function callForSuccess<T extends (options: { signal?: AbortSignal 
     let lastError: unknown;
 
     while (i < attempts) {
+        logDebug(`ATTEPMT ${i}`);
         if (signal?.aborted) {
             throw new BridgeSdkError(`Aborted after attempts ${i}`);
         }
@@ -57,6 +59,7 @@ export async function callForSuccess<T extends (options: { signal?: AbortSignal 
         try {
             return await fn({ signal });
         } catch (err) {
+            logDebug(`ERROR in callForSuccess ${JSON.stringify(err)}`, err);
             lastError = err;
             i++;
 

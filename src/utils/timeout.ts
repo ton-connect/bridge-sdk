@@ -39,17 +39,16 @@ export type Deferrable<T> = (
 export async function timeout<T>(fn: Deferrable<T>, options?: DeferOptions): Promise<T> {
     const { timeout, signal } = options ?? {};
 
-    const { resolve, reject, promise } = Promise.withResolvers<T>();
+    // eslint-disable-next-line no-async-promise-executor
+    return new Promise(async (resolve, reject) => {
+        if (signal?.aborted) {
+            reject(new BridgeSdkError('Operation aborted'));
+            return;
+        }
 
-    if (signal?.aborted) {
-        reject(new BridgeSdkError('Operation aborted'));
-        return promise;
-    }
+        const timeoutSignal = typeof timeout !== 'undefined' ? AbortSignal.timeout(timeout) : null;
 
-    const timeoutSignal = typeof timeout !== 'undefined' ? AbortSignal.timeout(timeout) : null;
-
-    const deferOptions = { timeout, abort: anySignal(signal, timeoutSignal) };
-    await fn(resolve, reject, deferOptions);
-
-    return promise;
+        const deferOptions = { timeout, abort: anySignal(signal, timeoutSignal) };
+        await fn(resolve, reject, deferOptions);
+    });
 }

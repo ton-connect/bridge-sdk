@@ -21,17 +21,15 @@ export async function delay(timeout: number, options?: DelayFnOptions): Promise<
         throw new BridgeSdkError('Delay aborted');
     }
 
-    const { promise, resolve, reject } = Promise.withResolvers<void>();
-
-    const timeoutId = setTimeout(resolve, timeout);
-    options?.signal?.addEventListener(
-        'abort',
-        () => {
-            clearTimeout(timeoutId);
-            reject(new BridgeSdkError('Delay aborted'));
-        },
-        { once: true },
-    );
-
-    return promise;
+    return new Promise((resolve, reject) => {
+        const timeoutId = setTimeout(resolve, timeout);
+        options?.signal?.addEventListener(
+            'abort',
+            () => {
+                clearTimeout(timeoutId);
+                reject(new BridgeSdkError('Delay aborted'));
+            },
+            { once: true },
+        );
+    });
 }
