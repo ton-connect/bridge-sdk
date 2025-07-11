@@ -6,8 +6,8 @@ export type BridgeWalletEvent = WalletResponse<RpcMethod> & { lastEventId: strin
 export type AppMessage<T extends RpcMethod> = AppRequest<T>;
 export type WalletMessage<T extends RpcMethod> = WalletResponse<T> | ConnectEvent | DisconnectEvent;
 
-export type BridgeAppEventListener = (e: BridgeAppEvent) => void;
-export type BridgeWalletEventListener = (e: BridgeWalletEvent) => void;
+export type BridgeAppEventListener = (e: BridgeWalletEvent) => void;
+export type BridgeWalletEventListener = (e: BridgeAppEvent) => void;
 
 export type AppConsumer = 'app';
 export type WalletConsumer = 'wallet';

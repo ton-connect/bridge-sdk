@@ -12,6 +12,7 @@ import {
     BridgeProviderConsumer,
     BridgeIncomingMessage,
 } from './models/bridge-messages';
+import { distinct } from './utils/distinct';
 
 export type BridgeProviderOpenParams<TConsumer extends BridgeProviderConsumer> = {
     bridgeUrl: string;
@@ -76,6 +77,7 @@ export class BridgeProvider<TConsumer extends BridgeProviderConsumer> {
 
         const openingDeadlineMS = options?.openingDeadlineMS ?? this.defaultOpeningDeadlineMS;
         this.clients = clients;
+        this.lastEventId = options?.lastEventId;
 
         // wait for the connection to be opened till abort signal
         await callForSuccess(
@@ -215,7 +217,7 @@ export class BridgeProvider<TConsumer extends BridgeProviderConsumer> {
 
         this.gateway = await BridgeGateway.open({
             bridgeUrl: this.bridgeUrl,
-            sessionIds: sessions.map(({ sessionId }) => sessionId),
+            sessionIds: distinct(sessions.map(({ sessionId }) => sessionId)),
             listener: this.gatewayListener.bind(this),
             errorsListener: this.gatewayErrorsListener.bind(this),
             lastEventId: this.lastEventId,
