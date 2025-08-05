@@ -18,15 +18,15 @@ export type BridgeGatewayOpenParams = {
 };
 
 export class BridgeGateway {
-    private readonly ssePath = 'events';
-    private readonly postPath = 'message';
-    private readonly defaultTtl = 300;
+    private static readonly ssePath = 'events';
+    private static readonly postPath = 'message';
+    private static readonly defaultTtl = 300;
 
     private eventSource = createResource(
         async (signal?: AbortSignal, openingDeadlineMS?: number): Promise<EventSource> => {
             const eventSourceConfig = {
                 bridgeUrl: this.bridgeUrl,
-                ssePath: this.ssePath,
+                ssePath: BridgeGateway.ssePath,
                 sessionIds: this.sessionIds,
                 errorHandler: this.errorsHandler.bind(this),
                 messageHandler: this.messagesHandler.bind(this),
@@ -85,7 +85,8 @@ export class BridgeGateway {
         await this.eventSource.create(options?.signal, options?.openingDeadlineMS);
     }
 
-    public async send(
+    static async sendRequest(
+        bridgeUrl: string,
         message: Uint8Array,
         from: string,
         receiver: string,
@@ -94,11 +95,11 @@ export class BridgeGateway {
             ttl?: number;
             signal?: AbortSignal;
         },
-    ): Promise<void> {
-        const url = new URL(addPathToUrl(this.bridgeUrl, this.postPath));
+    ) {
+        const url = new URL(addPathToUrl(bridgeUrl, this.postPath));
         url.searchParams.append('client_id', from);
         url.searchParams.append('to', receiver);
-        url.searchParams.append('ttl', (options?.ttl ?? this.defaultTtl).toString());
+        url.searchParams.append('ttl', (options?.ttl ?? BridgeGateway.defaultTtl).toString());
         if (options?.topic) {
             url.searchParams.append('topic', options.topic);
         }
@@ -109,6 +110,19 @@ export class BridgeGateway {
         if (!response.ok) {
             throw new BridgeSdkError(`Bridge send failed, status ${response.status}`);
         }
+    }
+
+    public async send(
+        message: Uint8Array,
+        from: string,
+        receiver: string,
+        options?: {
+            topic?: RpcMethod;
+            ttl?: number;
+            signal?: AbortSignal;
+        },
+    ): Promise<void> {
+        return BridgeGateway.sendRequest(this.bridgeUrl, message, from, receiver, options);
     }
 
     public async pause(): Promise<void> {
@@ -132,7 +146,7 @@ export class BridgeGateway {
         this.errorsListener = errorsListener;
     }
 
-    private async post(url: URL, body: string, signal?: AbortSignal): Promise<Response> {
+    private static async post(url: URL, body: string, signal?: AbortSignal): Promise<Response> {
         const response = await fetch(url, {
             method: 'post',
             body,

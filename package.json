@@ -1,6 +1,6 @@
 {
   "name": "bridge-sdk",
-  "version": "0.1.7",
+  "version": "0.1.8",
   "main": "dist/index.js",
   "module": "./dist/index.js",
   "types": "./dist/index.d.ts",
@@ -14,8 +14,8 @@
   "scripts": {
     "lint": "eslint . --max-warnings 0",
     "lint:fix": "eslint . --max-warnings 0 --fix",
-    "build": "rm -rf dist && tsc",
-    "clean": "rm -rf dist",
+    "type-check": "tsc --noEmit",
+    "build": "npm run type-check && tsup",
     "test": "jest"
   },
   "dependencies": {
@@ -25,13 +25,24 @@
   },
   "devDependencies": {
     "@ton/toolchain": "the-ton-tech/toolchain#v1.4.0",
-    "@tonconnect/sdk": "^3.2.0",
     "@types/jest": "^30.0.0",
     "@types/node": "^24.0.10",
     "eslint": "^9.30.1",
     "globals": "^16.3.0",
     "jest": "^30.0.4",
     "ts-jest": "^29.4.0",
+    "tsup": "^8.5.0",
     "typescript": "^5.8.3"
+  },
+  "tsup": {
+    "entry": ["src/index.ts"],
+    "format": ["esm", "cjs"],
+    "dts": true,
+    "sourcemap": false,
+    "minify": true,
+    "clean": true,
+    "treeshake": true,
+    "skipNodeModulesBundle": true,
+    "target": "es2022"
   }
 }

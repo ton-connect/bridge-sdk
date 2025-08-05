@@ -1,14 +1,11 @@
-// TODO: fixme
-function AbortSignalany(iterable: AbortSignal[]) {
+function abortSignalAny(iterable: AbortSignal[]) {
     const controller = new AbortController();
-    /**
-     * @this AbortSignal
-     */
-    function abort() {
-        // @ts-expect-error e
+
+    function abort(this: AbortSignal) {
         controller.abort(this.reason);
         clean();
     }
+
     function clean() {
         for (const signal of iterable) signal.removeEventListener('abort', abort);
     }
@@ -23,5 +20,5 @@ function AbortSignalany(iterable: AbortSignal[]) {
 
 export function anySignal(...signals: (AbortSignal | null | undefined)[]) {
     const existingSignals = signals.filter((signal) => signal !== null && signal !== undefined);
-    return AbortSignalany(existingSignals);
+    return abortSignalAny(existingSignals);
 }

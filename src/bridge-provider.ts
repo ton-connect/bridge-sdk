@@ -116,10 +116,6 @@ export class BridgeProvider<TConsumer extends BridgeProviderConsumer> {
             signal?: AbortSignal;
         } & RetryOptions,
     ): Promise<void> {
-        if (!this.gateway) {
-            throw new BridgeSdkError('Trying to send bridge request without session');
-        }
-
         if (options?.signal?.aborted) {
             return;
         }
@@ -132,7 +128,7 @@ export class BridgeProvider<TConsumer extends BridgeProviderConsumer> {
 
         await callForSuccess(
             async ({ signal }) => {
-                await this.gateway!.send(encodedRequest, session.sessionId, clientSessionId, {
+                await BridgeGateway.sendRequest(this.bridgeUrl, encodedRequest, session.sessionId, clientSessionId, {
                     signal,
                     ttl: options?.ttl,
                 });
