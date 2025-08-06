@@ -143,12 +143,11 @@ export class BridgeProvider<TConsumer extends BridgeProviderConsumer> {
 
     public async close(): Promise<void> {
         await this.closeGateway();
-        this.listener = null;
         this.lastEventId = undefined;
         this.clients = [];
     }
 
-    public listen(callback: BridgeEventListeners[TConsumer]) {
+    public listen(callback: BridgeEventListeners[TConsumer] | null) {
         this.listener = callback;
     }
 
