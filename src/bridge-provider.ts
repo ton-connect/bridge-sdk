@@ -212,6 +212,10 @@ export class BridgeProvider<TConsumer extends BridgeProviderConsumer> {
             signal?: AbortSignal;
         },
     ): Promise<void> {
+        if (options?.signal?.aborted) {
+            return;
+        }
+
         if (this.gateway) {
             logDebug(`Gateway is already opened, closing previous gateway`);
             await this.closeGateway();

@@ -165,7 +165,6 @@ export class BridgeGateway {
     }
 
     private async messagesHandler(e: MessageEvent<string>): Promise<void> {
-        logDebug('NEW MESSAGE RECEIVED', e);
         this.listener(e);
     }
 }
@@ -275,7 +274,7 @@ async function createEventSource(config: CreateEventSourceConfig): Promise<Event
                 }
             };
             eventSource.onopen = (): void => {
-                logDebug('Gateway opened');
+                logDebug('Event source opened');
 
                 if (signal?.aborted) {
                     eventSource.close();

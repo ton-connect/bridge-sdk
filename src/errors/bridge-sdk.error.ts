@@ -1,3 +1,5 @@
+import { logDebug } from '../utils/log';
+
 /**
  * Base class for BridgeSdk errors. You can check if the error was triggered by the @tonconnect/brdige-sdk using `err instanceof BridgeSdkError`.
  */
@@ -14,6 +16,7 @@ export class BridgeSdkError<T = unknown> extends Error {
             cause?: T;
         },
     ) {
+        logDebug('[BRIDGE_SDK_ERROR]', message, options);
         super(message, options);
 
         this.message = `${BridgeSdkError.prefix} ${this.constructor.name}${
