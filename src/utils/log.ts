@@ -1,7 +1,12 @@
 /* eslint-disable no-console */
 
+// Possible log levels: 'debug', 'warning', 'error'
+const LOG_LEVEL = process.env.TON_CONNECT_BRIDGE_SDK_LOG_LEVEL || 'error';
+
 export const logDebug: typeof console.debug = (...args) => {
-    console.debug('[TON_CONNECT_BRIDGE_SDK]', ...args);
+    if (LOG_LEVEL === 'debug') {
+        console.debug('[TON_CONNECT_BRIDGE_SDK]', ...args);
+    }
 };
 
 export const logError: typeof console.error = (...args) => {
@@ -9,5 +14,7 @@ export const logError: typeof console.error = (...args) => {
 };
 
 export const logWarning: typeof console.warn = (...args) => {
-    console.warn('[TON_CONNECT_BRIDGE_SDK]', ...args);
+    if (LOG_LEVEL === 'debug' || LOG_LEVEL === 'warning') {
+        console.warn('[TON_CONNECT_BRIDGE_SDK]', ...args);
+    }
 };
