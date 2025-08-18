@@ -67,19 +67,21 @@ export class BridgeProvider<TConsumer extends BridgeProviderConsumer> {
         clients: ClientConnection[],
         options?: { lastEventId?: string; openingDeadlineMS?: number; signal?: AbortSignal; exponential?: boolean },
     ): Promise<void> {
-        logDebug('Restoring connection...');
+        logDebug('[BridgeProvider] Restoring connection...');
         const abortController = createAbortController(options?.signal);
         this.abortController?.abort();
         this.abortController = abortController;
 
         if (abortController.signal.aborted) {
+            logDebug('[BridgeProvider] Restore aborted before start.');
             return;
         }
 
-        logDebug('Closing previous connection...');
+        logDebug('[BridgeProvider] Closing previous connection...');
         await this.closeGateway();
 
         if (abortController.signal.aborted) {
+            logDebug('[BridgeProvider] Restore aborted after close.');
             return;
         }
 
@@ -94,7 +96,7 @@ export class BridgeProvider<TConsumer extends BridgeProviderConsumer> {
                     this.clients.map((client) => client.session),
                     {
                         lastEventId: options?.lastEventId,
-                        openingDeadlineMS: openingDeadlineMS,
+                        openingDeadlineMS,
                         signal,
                     },
                 ),
@@ -117,14 +119,11 @@ export class BridgeProvider<TConsumer extends BridgeProviderConsumer> {
         } & RetryOptions,
     ): Promise<void> {
         if (options?.signal?.aborted) {
+            logDebug('[BridgeProvider] Send aborted before encryption.');
             return;
         }
 
         const encodedRequest = session.encrypt(JSON.stringify(message), hexToByteArray(clientSessionId));
-
-        if (options?.signal?.aborted) {
-            return;
-        }
 
         await callForSuccess(
             async ({ signal }) => {
@@ -142,9 +141,11 @@ export class BridgeProvider<TConsumer extends BridgeProviderConsumer> {
     }
 
     public async close(): Promise<void> {
+        logDebug('[BridgeProvider] Closing provider and gateway...');
         await this.closeGateway();
         this.lastEventId = undefined;
         this.clients = [];
+        logDebug('[BridgeProvider] Closed.');
     }
 
     public listen(callback: BridgeEventListeners[TConsumer] | null) {
@@ -177,7 +178,7 @@ export class BridgeProvider<TConsumer extends BridgeProviderConsumer> {
         try {
             bridgeIncomingMessage = JSON.parse(e.data);
         } catch {
-            throw new BridgeSdkError(`Bridge message parse failed, message ${e.data}`);
+            throw new BridgeSdkError(`Failed to parse message: ${e.data}`);
         }
 
         const sessionCrypto = this.getCryptoSession(bridgeIncomingMessage.from);
@@ -189,19 +190,21 @@ export class BridgeProvider<TConsumer extends BridgeProviderConsumer> {
             ),
         );
 
-        logDebug('Bridge message received:', request);
+        logDebug('[BridgeProvider] Incoming message decrypted:', request);
 
         this.listener?.({ lastEventId: e.lastEventId, ...request, from: bridgeIncomingMessage.from });
     }
 
     private async gatewayErrorsListener(e: Event): Promise<void> {
         if (this.gateway?.isClosed || this.gateway?.isConnecting) {
-            // TODO: probably will never execute
-            logError(`ERROR gatewayErrorsListener, ${JSON.stringify(e)}`, e);
+            logError('[BridgeProvider] Error in gatewayErrorsListener, trying to reconnect:', e);
             await this.restoreConnection(this.clients, { lastEventId: this.lastEventId, exponential: true });
             return;
         }
-        this.errorListener?.(new BridgeSdkError(`Bridge error ${JSON.stringify(e)}`));
+
+        const error = new BridgeSdkError(`Bridge error ${JSON.stringify(e)}`);
+        logError('[BridgeProvider] Gateway error:', error);
+        this.errorListener?.(error);
     }
 
     private async openGateway(
@@ -213,17 +216,19 @@ export class BridgeProvider<TConsumer extends BridgeProviderConsumer> {
         },
     ): Promise<void> {
         if (options?.signal?.aborted) {
+            logDebug('[BridgeProvider] Open gateway aborted before start.');
             return;
         }
 
         if (this.gateway) {
-            logDebug(`Gateway is already opened, closing previous gateway`);
+            logDebug('[BridgeProvider] Existing gateway detected. Closing it...');
             await this.closeGateway();
         }
 
-        logDebug('Opening bridge gateway...');
+        logDebug('[BridgeProvider] Creating new BridgeGateway instance...');
 
         if (options?.signal?.aborted) {
+            logDebug('[BridgeProvider] Open gateway aborted after close.');
             return;
         }
 
@@ -235,16 +240,22 @@ export class BridgeProvider<TConsumer extends BridgeProviderConsumer> {
             this.lastEventId,
         );
 
-        logDebug('Gateway is opened, trying connecting to bridge');
+        logDebug('[BridgeProvider] BridgeGateway created. Connecting to bridge...');
 
         await this.gateway.registerSession({
             openingDeadlineMS: options?.openingDeadlineMS,
             signal: options?.signal,
         });
+
+        logDebug('[BridgeProvider] Connected to bridge successfully.');
     }
 
     private async closeGateway(): Promise<void> {
-        await this.gateway?.close();
-        this.gateway = null;
+        if (this.gateway) {
+            logDebug('[BridgeProvider] Closing gateway...');
+            await this.gateway.close();
+            this.gateway = null;
+            logDebug('[BridgeProvider] Gateway closed.');
+        }
     }
 }

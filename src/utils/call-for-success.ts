@@ -51,7 +51,7 @@ export async function callForSuccess<T extends (options: { signal?: AbortSignal 
     let lastError: unknown;
 
     while (i < attempts) {
-        logDebug(`ATTEPMT ${i}`);
+        logDebug(`[callForSuccess] Attempt: ${i}`);
         if (signal?.aborted) {
             throw new BridgeSdkError(`Aborted after attempts ${i}`);
         }
@@ -59,7 +59,7 @@ export async function callForSuccess<T extends (options: { signal?: AbortSignal 
         try {
             return await fn({ signal });
         } catch (err) {
-            logDebug(`ERROR in callForSuccess ${JSON.stringify(err)}`, err);
+            logDebug(`[callForSuccess], error after attempt ${i}: ${JSON.stringify(err)}`, err);
             lastError = err;
             i++;
 

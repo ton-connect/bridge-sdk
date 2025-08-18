@@ -20,14 +20,14 @@ describe('Bridge stress tests', () => {
             wallet: BridgeProvider<WalletConsumer>;
             appSession: SessionCrypto;
             walletSession: SessionCrypto;
-            receivedMessages: any[];
+            receivedMessages: { id: string }[];
         }> = [];
 
         // Create CLIENT_COUNT client pairs (app + wallet)
         for (let i = 0; i < CLIENT_COUNT; i++) {
             const appSession = new SessionCrypto();
             const walletSession = new SessionCrypto();
-            const receivedMessages: any[] = [];
+            const receivedMessages: { id: string }[] = [];
 
             const app = await BridgeProvider.open<AppConsumer>({
                 bridgeUrl: BRIDGE_URL,

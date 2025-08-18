@@ -16,12 +16,12 @@ export class BridgeSdkError<T = unknown> extends Error {
             cause?: T;
         },
     ) {
-        logDebug('[BRIDGE_SDK_ERROR]', message, options);
         super(message, options);
 
         this.message = `${BridgeSdkError.prefix} ${this.constructor.name}${
             this.info ? ': ' + this.info : ''
         }${message ? '\n' + message : ''}`;
+        logDebug(this.message);
 
         Object.setPrototypeOf(this, BridgeSdkError.prototype);
     }

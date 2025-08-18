@@ -126,7 +126,9 @@ export class BridgeGateway {
     }
 
     public async pause(): Promise<void> {
-        await this.eventSource.dispose().catch((e) => logError(`Bridge pause failed, ${e}`));
+        await this.eventSource.dispose().catch((e) => {
+            logError('[BridgeGateway] Failed to pause connection:', e);
+        });
     }
 
     public async unPause(): Promise<void> {
@@ -135,7 +137,9 @@ export class BridgeGateway {
     }
 
     public async close(): Promise<void> {
-        await this.eventSource.dispose().catch((e) => logError(`Bridge close failed, ${e}`));
+        await this.eventSource.dispose().catch((e) => {
+            logError('[BridgeGateway] Failed to close connection:', e);
+        });
     }
 
     public setListener(listener: (e: MessageEvent<string>) => void): void {
@@ -160,7 +164,7 @@ export class BridgeGateway {
         return response;
     }
 
-    private async errorsHandler(eventSource: EventSource, e: Event): Promise<void> {
+    private async errorsHandler(_eventSource: EventSource, e: Event): Promise<void> {
         this.errorsListener(e);
     }
 
@@ -234,7 +238,7 @@ async function createEventSource(config: CreateEventSourceConfig): Promise<Event
         async (resolve, reject, deferOptions) => {
             const { signal } = deferOptions;
 
-            logDebug('Connecting to bridge...');
+            logDebug('[BridgeGateway] Connecting to bridge SSE...');
 
             if (signal?.aborted) {
                 reject(new BridgeSdkError('Bridge connection aborted'));
@@ -253,12 +257,12 @@ async function createEventSource(config: CreateEventSourceConfig): Promise<Event
                 return;
             }
 
-            logDebug('Creating event source...');
+            logDebug('[BridgeGateway] Initializing EventSource instance...');
 
             const eventSource = new EventSource(url.toString());
 
             eventSource.onerror = async (reason: Event): Promise<void> => {
-                logError(`BridgeGateway error, ${JSON.stringify(reason)}`);
+                logError('[BridgeGateway] EventSource error occurred:', reason);
 
                 if (signal?.aborted) {
                     eventSource.close();
@@ -274,7 +278,7 @@ async function createEventSource(config: CreateEventSourceConfig): Promise<Event
                 }
             };
             eventSource.onopen = (): void => {
-                logDebug('Event source opened');
+                logDebug('[BridgeGateway] EventSource connection established.');
 
                 if (signal?.aborted) {
                     eventSource.close();
@@ -284,7 +288,7 @@ async function createEventSource(config: CreateEventSourceConfig): Promise<Event
                 resolve(eventSource);
             };
             eventSource.onmessage = (event: MessageEvent<string>): void => {
-                logDebug('Bridge gateway message', event);
+                logDebug(`[BridgeGateway] Message received. Event ID: ${event.lastEventId}`);
                 lastEventId = event.lastEventId;
 
                 if (signal?.aborted) {
