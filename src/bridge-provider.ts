@@ -21,6 +21,7 @@ export type BridgeProviderOpenParams<TConsumer extends BridgeProviderConsumer> =
     errorListener?: (error: unknown) => void;
     options?: {
         lastEventId?: string;
+        connectingDeadlineMS?: number;
         openingDeadlineMS?: number;
         signal?: AbortSignal;
         exponential?: boolean;
@@ -35,7 +36,7 @@ export class BridgeProvider<TConsumer extends BridgeProviderConsumer> {
     private gateway: BridgeGateway | null = null;
 
     private readonly heartbeatMessage = 'heartbeat';
-    private readonly defaultOpeningDeadlineMS = 16000;
+    private readonly defaultConnectingDeadlineMS = 16000;
     private readonly defaultRetryTimeoutMS = 2000;
 
     private lastHeartbeatAt: number = Date.now();
@@ -116,7 +117,13 @@ export class BridgeProvider<TConsumer extends BridgeProviderConsumer> {
 
     public async restoreConnection(
         clients: ClientConnection[],
-        options?: { lastEventId?: string; openingDeadlineMS?: number; signal?: AbortSignal; exponential?: boolean },
+        options?: {
+            lastEventId?: string;
+            openingDeadlineMS?: number;
+            connectingDeadlineMS?: number;
+            signal?: AbortSignal;
+            exponential?: boolean;
+        },
     ): Promise<void> {
         logDebug('[BridgeProvider] Restoring connection...');
         const abortController = createAbortController(options?.signal);
@@ -136,9 +143,14 @@ export class BridgeProvider<TConsumer extends BridgeProviderConsumer> {
             return;
         }
 
-        const openingDeadlineMS = options?.openingDeadlineMS ?? this.defaultOpeningDeadlineMS;
+        const connectingDeadlineMS = options?.connectingDeadlineMS ?? this.defaultConnectingDeadlineMS;
         this.clients = clients;
         this.lastEventId = options?.lastEventId;
+
+        let openingTimeout: ReturnType<typeof setTimeout> | undefined;
+        if (options?.openingDeadlineMS) {
+            openingTimeout = setTimeout(() => abortController.abort(), options?.openingDeadlineMS);
+        }
 
         // wait for the connection to be opened till abort signal
         await callForSuccess(
@@ -147,7 +159,7 @@ export class BridgeProvider<TConsumer extends BridgeProviderConsumer> {
                     this.clients.map((client) => client.session),
                     {
                         lastEventId: options?.lastEventId,
-                        openingDeadlineMS,
+                        connectingDeadlineMS,
                         signal,
                     },
                 ),
@@ -158,6 +170,10 @@ export class BridgeProvider<TConsumer extends BridgeProviderConsumer> {
                 exponential: options?.exponential ?? true,
             },
         );
+
+        if (openingTimeout) {
+            clearTimeout(openingTimeout);
+        }
     }
 
     public async send<TMethod extends RpcMethod>(
@@ -248,13 +264,9 @@ export class BridgeProvider<TConsumer extends BridgeProviderConsumer> {
     }
 
     private async gatewayErrorsListener(e: Event): Promise<void> {
-        if (this.gateway?.isClosed || this.gateway?.isConnecting) {
+        if (this.gateway?.isClosed) {
             logError('[BridgeProvider] Error in gatewayErrorsListener, trying to reconnect:', e);
-            await this.restoreConnection(this.clients, {
-                lastEventId: this.lastEventId,
-                exponential: true,
-            });
-            return;
+            return this.gateway.recreate(this.defaultRetryTimeoutMS);
         }
 
         const error = new BridgeSdkError(`Bridge error ${JSON.stringify(e)}`);
@@ -266,7 +278,7 @@ export class BridgeProvider<TConsumer extends BridgeProviderConsumer> {
         sessions: SessionCrypto[],
         options?: {
             lastEventId?: string;
-            openingDeadlineMS?: number;
+            connectingDeadlineMS?: number;
             signal?: AbortSignal;
         },
     ): Promise<void> {
@@ -299,7 +311,7 @@ export class BridgeProvider<TConsumer extends BridgeProviderConsumer> {
         logDebug('[BridgeProvider] BridgeGateway created. Connecting to bridge...');
 
         await this.gateway.registerSession({
-            openingDeadlineMS: options?.openingDeadlineMS,
+            connectingDeadlineMS: options?.connectingDeadlineMS,
             signal: options?.signal,
         });
 

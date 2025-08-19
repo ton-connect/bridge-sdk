@@ -25,7 +25,7 @@ export class BridgeGateway {
     private static readonly defaultTtl = 300;
 
     private eventSource = createResource(
-        async (signal?: AbortSignal, openingDeadlineMS?: number): Promise<EventSource> => {
+        async (signal?: AbortSignal, connectingDeadlineMS?: number): Promise<EventSource> => {
             const eventSourceConfig = {
                 bridgeUrl: this.bridgeUrl,
                 ssePath: BridgeGateway.ssePath,
@@ -33,7 +33,7 @@ export class BridgeGateway {
                 errorHandler: this.errorsHandler.bind(this),
                 messageHandler: this.messagesHandler.bind(this),
                 signal: signal,
-                openingDeadlineMS: openingDeadlineMS,
+                connectingDeadlineMS: connectingDeadlineMS,
                 lastEventId: this.lastEventId,
                 heartbeatFormat: this.heartbeatFormat,
             };
@@ -87,7 +87,7 @@ export class BridgeGateway {
     }
 
     async registerSession(options?: RegisterSessionOptions): Promise<void> {
-        await this.eventSource.create(options?.signal, options?.openingDeadlineMS);
+        await this.eventSource.create(options?.signal, options?.connectingDeadlineMS);
     }
 
     static async sendRequest(
@@ -134,6 +134,10 @@ export class BridgeGateway {
         await this.eventSource.dispose().catch((e) => {
             logError('[BridgeGateway] Failed to pause connection:', e);
         });
+    }
+
+    public async recreate(delayMs: number): Promise<void> {
+        await this.eventSource.recreate(delayMs);
     }
 
     public async unPause(): Promise<void> {
@@ -185,7 +189,7 @@ export type RegisterSessionOptions = {
     /**
      * Deadline for opening the event source.
      */
-    openingDeadlineMS?: number;
+    connectingDeadlineMS?: number;
 
     /**
      * Signal to abort the operation.
@@ -224,7 +228,7 @@ export type CreateEventSourceConfig = {
     /**
      * Deadline for opening the event source.
      */
-    openingDeadlineMS?: number;
+    connectingDeadlineMS?: number;
 
     /**
      * Last event id to get events from
@@ -315,6 +319,6 @@ async function createEventSource(config: CreateEventSourceConfig): Promise<Event
                 reject(new BridgeSdkError('Bridge connection aborted'));
             });
         },
-        { timeout: config.openingDeadlineMS, signal: config.signal },
+        { timeout: config.connectingDeadlineMS, signal: config.signal },
     );
 }
