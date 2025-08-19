@@ -19,7 +19,13 @@ export type BridgeProviderOpenParams<TConsumer extends BridgeProviderConsumer> =
     clients: ClientConnection[];
     listener?: BridgeEventListeners[TConsumer];
     errorListener?: (error: unknown) => void;
-    options?: { lastEventId?: string; openingDeadlineMS?: number; signal?: AbortSignal; exponential?: boolean };
+    options?: {
+        lastEventId?: string;
+        openingDeadlineMS?: number;
+        signal?: AbortSignal;
+        exponential?: boolean;
+        heartbeatReconnectIntervalMs?: number;
+    };
 };
 
 export class BridgeProvider<TConsumer extends BridgeProviderConsumer> {
@@ -32,10 +38,18 @@ export class BridgeProvider<TConsumer extends BridgeProviderConsumer> {
     private readonly defaultOpeningDeadlineMS = 16000;
     private readonly defaultRetryTimeoutMS = 2000;
 
+    private lastHeartbeatAt: number = Date.now();
+    private heartbeatInterval: ReturnType<typeof setInterval> | null = null;
+
     static async open<TConsumer extends BridgeProviderConsumer = 'wallet'>(
         params: BridgeProviderOpenParams<TConsumer>,
     ): Promise<BridgeProvider<TConsumer>> {
-        const provider = new BridgeProvider<TConsumer>(params.bridgeUrl, params.listener);
+        const provider = new BridgeProvider<TConsumer>(
+            params.bridgeUrl,
+            params.listener,
+            params.errorListener,
+            params.options?.heartbeatReconnectIntervalMs,
+        );
         try {
             await provider.restoreConnection(params.clients, params.options);
             return provider;
@@ -49,6 +63,7 @@ export class BridgeProvider<TConsumer extends BridgeProviderConsumer> {
         private readonly bridgeUrl: string,
         private listener: BridgeEventListeners[TConsumer] | null = null,
         private errorListener: ((error: unknown) => void) | null = null,
+        private heartbeatReconnectIntervalMs: number | undefined = undefined,
     ) {}
 
     public get isReady(): boolean {
@@ -61,6 +76,42 @@ export class BridgeProvider<TConsumer extends BridgeProviderConsumer> {
 
     public get isClosed(): boolean {
         return Boolean(this.gateway) && this.gateway!.isClosed;
+    }
+
+    private startHeartbeatWatcher(signal?: AbortSignal) {
+        if (!this.heartbeatReconnectIntervalMs) return;
+
+        this.stopHeartbeatWatcher();
+
+        this.lastHeartbeatAt = Date.now();
+        this.heartbeatInterval = setInterval(async () => {
+            if (signal?.aborted) {
+                this.stopHeartbeatWatcher();
+                return;
+            }
+
+            const elapsed = Date.now() - this.lastHeartbeatAt;
+            if (elapsed > this.heartbeatReconnectIntervalMs!) {
+                logDebug(`[BridgeProvider] No heartbeat for ${elapsed}ms, reconnecting...`);
+                try {
+                    await this.restoreConnection(this.clients, {
+                        lastEventId: this.lastEventId,
+                        exponential: true,
+                    });
+                    this.lastHeartbeatAt = Date.now(); // reset after reconnect
+                } catch (err) {
+                    logError('[BridgeProvider] Failed to reconnect after missed heartbeat:', err);
+                    this.errorListener?.(err);
+                }
+            }
+        }, this.heartbeatReconnectIntervalMs);
+    }
+
+    private stopHeartbeatWatcher() {
+        if (this.heartbeatInterval) {
+            clearInterval(this.heartbeatInterval);
+            this.heartbeatInterval = null;
+        }
     }
 
     public async restoreConnection(
@@ -170,7 +221,8 @@ export class BridgeProvider<TConsumer extends BridgeProviderConsumer> {
 
     private async gatewayListener(e: MessageEvent<string>): Promise<void> {
         if (e.data === this.heartbeatMessage) {
-            return; // TODO: reconnect if no heartbeat in 25 sec
+            this.lastHeartbeatAt = Date.now();
+            return;
         }
         this.lastEventId = e.lastEventId;
 
@@ -198,7 +250,10 @@ export class BridgeProvider<TConsumer extends BridgeProviderConsumer> {
     private async gatewayErrorsListener(e: Event): Promise<void> {
         if (this.gateway?.isClosed || this.gateway?.isConnecting) {
             logError('[BridgeProvider] Error in gatewayErrorsListener, trying to reconnect:', e);
-            await this.restoreConnection(this.clients, { lastEventId: this.lastEventId, exponential: true });
+            await this.restoreConnection(this.clients, {
+                lastEventId: this.lastEventId,
+                exponential: true,
+            });
             return;
         }
 
@@ -238,6 +293,7 @@ export class BridgeProvider<TConsumer extends BridgeProviderConsumer> {
             this.gatewayListener.bind(this),
             this.gatewayErrorsListener.bind(this),
             this.lastEventId,
+            'message',
         );
 
         logDebug('[BridgeProvider] BridgeGateway created. Connecting to bridge...');
@@ -248,11 +304,14 @@ export class BridgeProvider<TConsumer extends BridgeProviderConsumer> {
         });
 
         logDebug('[BridgeProvider] Connected to bridge successfully.');
+
+        this.startHeartbeatWatcher(options?.signal);
     }
 
     private async closeGateway(): Promise<void> {
         if (this.gateway) {
             logDebug('[BridgeProvider] Closing gateway...');
+            this.stopHeartbeatWatcher();
             await this.gateway.close();
             this.gateway = null;
             logDebug('[BridgeProvider] Gateway closed.');

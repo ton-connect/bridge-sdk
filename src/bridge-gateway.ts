@@ -7,6 +7,7 @@ import '@tonconnect/isomorphic-fetch';
 import { logDebug, logError } from './utils/log';
 import { createResource } from './utils/resource';
 import { timeout } from './utils/timeout';
+import { HeartbeatFormat } from './models/heartbeat';
 
 export type BridgeGatewayOpenParams = {
     bridgeUrl: string;
@@ -15,6 +16,7 @@ export type BridgeGatewayOpenParams = {
     errorsListener: (err: Event) => void;
     lastEventId?: string;
     options?: RegisterSessionOptions;
+    heartbeatFormat?: HeartbeatFormat;
 };
 
 export class BridgeGateway {
@@ -33,6 +35,7 @@ export class BridgeGateway {
                 signal: signal,
                 openingDeadlineMS: openingDeadlineMS,
                 lastEventId: this.lastEventId,
+                heartbeatFormat: this.heartbeatFormat,
             };
             return await createEventSource(eventSourceConfig);
         },
@@ -62,6 +65,7 @@ export class BridgeGateway {
         private listener: (e: MessageEvent<string>) => void,
         private errorsListener: (err: Event) => void,
         private readonly lastEventId?: string,
+        private readonly heartbeatFormat?: HeartbeatFormat,
     ) {}
 
     static async open(params: BridgeGatewayOpenParams) {
@@ -71,6 +75,7 @@ export class BridgeGateway {
             params.listener,
             params.errorsListener,
             params.lastEventId,
+            params.heartbeatFormat,
         );
         try {
             await bridgeGateway.registerSession(params.options);
@@ -225,6 +230,8 @@ export type CreateEventSourceConfig = {
      * Last event id to get events from
      */
     lastEventId?: string;
+
+    heartbeatFormat?: HeartbeatFormat;
 };
 
 /**
@@ -232,7 +239,7 @@ export type CreateEventSourceConfig = {
  * @param {CreateEventSourceConfig} config - Configuration for creating an event source.
  */
 async function createEventSource(config: CreateEventSourceConfig): Promise<EventSource> {
-    let lastEventId = config.lastEventId;
+    let { lastEventId, heartbeatFormat } = config;
 
     return await timeout(
         async (resolve, reject, deferOptions) => {
@@ -250,6 +257,9 @@ async function createEventSource(config: CreateEventSourceConfig): Promise<Event
 
             if (lastEventId) {
                 url.searchParams.append('last_event_id', lastEventId);
+            }
+            if (heartbeatFormat) {
+                url.searchParams.append('heartbeat', heartbeatFormat);
             }
 
             if (signal?.aborted) {

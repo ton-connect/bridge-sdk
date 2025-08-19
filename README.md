@@ -60,7 +60,10 @@ const wallet = await BridgeProvider.open<WalletConsumer>({
 >   bridgeUrl,
 >   clients: restoredClients, // array of { session, clientId }
 >   listener,
->   options: { lastEventId: restoredLastEventId }
+>   options: {
+>     lastEventId: restoredLastEventId,
+>     heartbeatReconnectIntervalMs: 15_000, // should be 3 times bigger than actual heartbeat interval
+>   }
 > });
 > ```
 >
@@ -110,7 +113,7 @@ const wallet = await BridgeProvider.open<WalletConsumer>({
     console.log('Received from app:', event);
     // handle event according to TON Connect protocol
   },
-  options: { lastEventId }, // (optional, for reconnection)
+  options: { lastEventId, heartbeatReconnectInterval: 15000 },
 });
 
 // ... use wallet, then:
