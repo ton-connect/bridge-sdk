@@ -23,7 +23,6 @@ export type BridgeProviderOpenParams<TConsumer extends BridgeProviderConsumer> =
     options?: {
         lastEventId?: string;
         connectingDeadlineMS?: number;
-        openingDeadlineMS?: number;
         signal?: AbortSignal;
         exponential?: boolean;
         heartbeatReconnectIntervalMs?: number;
@@ -126,7 +125,6 @@ export class BridgeProvider<TConsumer extends BridgeProviderConsumer> {
         clients: ClientConnection[],
         options?: {
             lastEventId?: string;
-            openingDeadlineMS?: number;
             connectingDeadlineMS?: number;
             signal?: AbortSignal;
         } & Omit<RetryOptions, 'attempts'>,
@@ -153,11 +151,6 @@ export class BridgeProvider<TConsumer extends BridgeProviderConsumer> {
         this.clients = clients;
         this.lastEventId = options?.lastEventId;
 
-        let openingTimeout: ReturnType<typeof setTimeout> | undefined;
-        if (options?.openingDeadlineMS) {
-            openingTimeout = setTimeout(() => abortController.abort(), options?.openingDeadlineMS);
-        }
-
         // wait for the connection to be opened till abort signal
         await callForSuccess(
             ({ signal }) => {
@@ -178,10 +171,6 @@ export class BridgeProvider<TConsumer extends BridgeProviderConsumer> {
                 maxDelayMs: options?.maxDelayMs ?? this.defaultMaxExponentialDelayMS,
             },
         );
-
-        if (openingTimeout) {
-            clearTimeout(openingTimeout);
-        }
     }
 
     public async send<TMethod extends RpcMethod>(
