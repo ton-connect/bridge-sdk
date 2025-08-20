@@ -19,6 +19,12 @@ export type RetryOptions = {
      * If false or omitted, the delay remains constant across all attempts.
      */
     exponential?: boolean;
+
+    /**
+     * The maximum delay in milliseconds when using exponential backoff.
+     * The delay will not exceed this value, even if doubling would result in a higher delay.
+     */
+    maxDelayMs?: number;
 };
 
 /**
@@ -59,7 +65,7 @@ export async function callForSuccess<T extends (options: { signal?: AbortSignal 
         try {
             return await fn({ signal });
         } catch (err) {
-            logDebug(`[callForSuccess], error after attempt ${i}: ${JSON.stringify(err)}`, err);
+            logDebug(`[callForSuccess], error after attempt ${i}, ${new Date()}: ${JSON.stringify(err)}`, err);
             lastError = err;
             i++;
 
@@ -67,6 +73,9 @@ export async function callForSuccess<T extends (options: { signal?: AbortSignal 
                 await delay(delayMs);
                 if (options?.exponential) {
                     delayMs *= 2;
+                    if (options.maxDelayMs !== undefined) {
+                        delayMs = Math.min(options.maxDelayMs, delayMs);
+                    }
                 }
             }
         }
