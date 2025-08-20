@@ -275,12 +275,19 @@ async function createEventSource(config: CreateEventSourceConfig): Promise<Event
 
             const eventSource = new EventSource(url.toString());
 
+            let wasPreviouslyOpened = false;
             eventSource.onerror = async (reason: Event): Promise<void> => {
                 logError('[BridgeGateway] EventSource error occurred:', reason);
 
                 if (signal?.aborted) {
                     eventSource.close();
                     reject(new BridgeSdkError('Bridge connection aborted'));
+                    return;
+                }
+
+                if (!wasPreviouslyOpened) {
+                    eventSource.close();
+                    reject(new BridgeSdkError(`Bridge error before connecting...`));
                     return;
                 }
 
@@ -291,26 +298,27 @@ async function createEventSource(config: CreateEventSourceConfig): Promise<Event
                     reject(e);
                 }
             };
-            eventSource.onopen = (): void => {
-                logDebug('[BridgeGateway] EventSource connection established.');
 
+            eventSource.onopen = (): void => {
                 if (signal?.aborted) {
                     eventSource.close();
                     reject(new BridgeSdkError('Bridge connection aborted'));
                     return;
                 }
+
+                wasPreviouslyOpened = true;
+                logDebug('[BridgeGateway] EventSource connection established.');
                 resolve(eventSource);
             };
-            eventSource.onmessage = (event: MessageEvent<string>): void => {
-                logDebug(`[BridgeGateway] Message received. Event ID: ${event.lastEventId}`);
-                lastEventId = event.lastEventId;
 
+            eventSource.onmessage = (event: MessageEvent<string>): void => {
                 if (signal?.aborted) {
                     eventSource.close();
                     reject(new BridgeSdkError('Bridge connection aborted'));
                     return;
                 }
 
+                lastEventId = event.lastEventId;
                 config.messageHandler(event);
             };
 

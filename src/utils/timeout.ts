@@ -1,5 +1,5 @@
 import { BridgeSdkError } from '../errors/bridge-sdk.error';
-import { anySignal } from './any-signal';
+import { createAbortController } from './create-abort-controller';
 
 /**
  * Represents the options for deferring a task.
@@ -36,8 +36,11 @@ export type Deferrable<T> = (
  * @param {DeferOptions} options - Optional configuration options for the defer behavior.
  * @returns {Promise<T>} - A promise that resolves with the result of the executed function, or rejects with an error if it times out or is aborted.
  */
-export async function timeout<T>(fn: Deferrable<T>, options?: DeferOptions): Promise<T> {
-    const { timeout, signal } = options ?? {};
+export function timeout<T>(fn: Deferrable<T>, options?: DeferOptions): Promise<T> {
+    const timeout = options?.timeout;
+    const signal = options?.signal;
+
+    const abortController = createAbortController(signal);
 
     // eslint-disable-next-line no-async-promise-executor
     return new Promise(async (resolve, reject) => {
@@ -46,9 +49,34 @@ export async function timeout<T>(fn: Deferrable<T>, options?: DeferOptions): Pro
             return;
         }
 
-        const timeoutSignal = typeof timeout !== 'undefined' ? AbortSignal.timeout(timeout) : null;
+        let timeoutId: ReturnType<typeof setTimeout> | undefined;
+        if (typeof timeout !== 'undefined') {
+            timeoutId = setTimeout(() => {
+                abortController.abort();
+                reject(new BridgeSdkError(`Timeout after ${timeout}ms`));
+            }, timeout);
+        }
 
-        const deferOptions = { timeout, abort: anySignal(signal, timeoutSignal) };
-        await fn(resolve, reject, deferOptions);
+        abortController.signal.addEventListener(
+            'abort',
+            () => {
+                clearTimeout(timeoutId);
+                reject(new BridgeSdkError('Operation aborted'));
+            },
+            { once: true },
+        );
+
+        const deferOptions = { timeout, abort: abortController.signal };
+        await fn(
+            (...args) => {
+                clearTimeout(timeoutId);
+                resolve(...args);
+            },
+            () => {
+                clearTimeout(timeoutId);
+                reject();
+            },
+            deferOptions,
+        );
     });
 }

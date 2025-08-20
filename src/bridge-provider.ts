@@ -39,8 +39,9 @@ export class BridgeProvider<TConsumer extends BridgeProviderConsumer> {
     private onConnectingCallback?: () => void;
 
     private readonly heartbeatMessage = 'heartbeat';
-    private readonly defaultConnectingDeadlineMS = 16000;
-    private readonly defaultRetryTimeoutMS = 2000;
+    private readonly defaultConnectingDeadlineMS = 14_000;
+    private readonly defaultRetryTimeoutMS = 2_000;
+    private readonly defaultMaxExponentialDelayMS = 10_000;
 
     private lastHeartbeatAt: number = Date.now();
     private heartbeatInterval: ReturnType<typeof setInterval> | null = null;
@@ -128,8 +129,7 @@ export class BridgeProvider<TConsumer extends BridgeProviderConsumer> {
             openingDeadlineMS?: number;
             connectingDeadlineMS?: number;
             signal?: AbortSignal;
-            exponential?: boolean;
-        },
+        } & Omit<RetryOptions, 'attempts'>,
     ): Promise<void> {
         logDebug('[BridgeProvider] Restoring connection...');
         const abortController = createAbortController(options?.signal);
@@ -172,9 +172,10 @@ export class BridgeProvider<TConsumer extends BridgeProviderConsumer> {
             },
             {
                 attempts: Number.MAX_SAFE_INTEGER,
-                delayMs: this.defaultRetryTimeoutMS,
+                delayMs: options?.delayMs ?? this.defaultRetryTimeoutMS,
                 signal: abortController.signal,
                 exponential: options?.exponential ?? true,
+                maxDelayMs: options?.maxDelayMs ?? this.defaultMaxExponentialDelayMS,
             },
         );
 
@@ -210,6 +211,8 @@ export class BridgeProvider<TConsumer extends BridgeProviderConsumer> {
                 attempts: options?.attempts ?? Number.MAX_SAFE_INTEGER,
                 delayMs: options?.delayMs ?? this.defaultRetryTimeoutMS,
                 signal: options?.signal,
+                exponential: options?.exponential ?? true,
+                maxDelayMs: options?.maxDelayMs ?? this.defaultMaxExponentialDelayMS,
             },
         );
     }
@@ -263,7 +266,7 @@ export class BridgeProvider<TConsumer extends BridgeProviderConsumer> {
             this.lastHeartbeatAt = Date.now();
             return;
         }
-        this.lastEventId = e.lastEventId;
+        logDebug(`[BridgeProvider] Message received. Event ID: ${e.lastEventId}`);
 
         let bridgeIncomingMessage: BridgeIncomingMessage;
         try {
@@ -283,11 +286,12 @@ export class BridgeProvider<TConsumer extends BridgeProviderConsumer> {
 
         logDebug('[BridgeProvider] Incoming message decrypted:', request);
 
+        this.lastEventId = e.lastEventId;
         this.listener?.({ lastEventId: e.lastEventId, ...request, from: bridgeIncomingMessage.from });
     }
 
     private async gatewayErrorsListener(e: Event): Promise<void> {
-        if (this.gateway?.isClosed) {
+        if (this.gateway?.isClosed || this.gateway?.isConnecting) {
             logError('[BridgeProvider] Error in gatewayErrorsListener, trying to reconnect:', e);
             this.onConnectingCallback?.();
             return this.gateway.recreate(this.defaultRetryTimeoutMS);
