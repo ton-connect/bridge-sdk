@@ -19,6 +19,7 @@ export type BridgeProviderOpenParams<TConsumer extends BridgeProviderConsumer> =
     clients: ClientConnection[];
     listener?: BridgeEventListeners[TConsumer];
     errorListener?: (error: unknown) => void;
+    onConnect?: () => void;
     options?: {
         lastEventId?: string;
         connectingDeadlineMS?: number;
@@ -34,6 +35,8 @@ export class BridgeProvider<TConsumer extends BridgeProviderConsumer> {
     private lastEventId?: string;
     private abortController?: AbortController;
     private gateway: BridgeGateway | null = null;
+
+    private onConnectingCallback?: () => void;
 
     private readonly heartbeatMessage = 'heartbeat';
     private readonly defaultConnectingDeadlineMS = 16000;
@@ -51,6 +54,9 @@ export class BridgeProvider<TConsumer extends BridgeProviderConsumer> {
             params.errorListener,
             params.options?.heartbeatReconnectIntervalMs,
         );
+        if (params.onConnect) {
+            provider.onConnecting = params.onConnect;
+        }
         try {
             await provider.restoreConnection(params.clients, params.options);
             return provider;
@@ -93,13 +99,13 @@ export class BridgeProvider<TConsumer extends BridgeProviderConsumer> {
 
             const elapsed = Date.now() - this.lastHeartbeatAt;
             if (elapsed > this.heartbeatReconnectIntervalMs!) {
+                this.stopHeartbeatWatcher();
                 logDebug(`[BridgeProvider] No heartbeat for ${elapsed}ms, reconnecting...`);
                 try {
                     await this.restoreConnection(this.clients, {
                         lastEventId: this.lastEventId,
                         exponential: true,
                     });
-                    this.lastHeartbeatAt = Date.now(); // reset after reconnect
                 } catch (err) {
                     logError('[BridgeProvider] Failed to reconnect after missed heartbeat:', err);
                     this.errorListener?.(err);
@@ -154,15 +160,16 @@ export class BridgeProvider<TConsumer extends BridgeProviderConsumer> {
 
         // wait for the connection to be opened till abort signal
         await callForSuccess(
-            ({ signal }) =>
-                this.openGateway(
+            ({ signal }) => {
+                return this.openGateway(
                     this.clients.map((client) => client.session),
                     {
                         lastEventId: options?.lastEventId,
                         connectingDeadlineMS,
                         signal,
                     },
-                ),
+                );
+            },
             {
                 attempts: Number.MAX_SAFE_INTEGER,
                 delayMs: this.defaultRetryTimeoutMS,
@@ -220,11 +227,27 @@ export class BridgeProvider<TConsumer extends BridgeProviderConsumer> {
     }
 
     public async pause(): Promise<void> {
-        await this.gateway?.pause();
+        if (this.gateway) {
+            this.stopHeartbeatWatcher();
+            await this.gateway.pause();
+        }
+    }
+
+    public set onConnecting(value: () => void) {
+        this.onConnectingCallback = () => {
+            try {
+                value();
+            } catch (error) {
+                logError(`[BridgeProvider] Error during onConnecting callback: ${JSON.stringify(error)}`, error);
+            }
+        };
     }
 
     public async unPause(): Promise<void> {
-        await this.gateway?.unPause();
+        if (this.gateway) {
+            await this.gateway.unPause();
+            this.startHeartbeatWatcher(this.abortController?.signal);
+        }
     }
 
     public getCryptoSession(clientSessionId: string) {
@@ -266,6 +289,7 @@ export class BridgeProvider<TConsumer extends BridgeProviderConsumer> {
     private async gatewayErrorsListener(e: Event): Promise<void> {
         if (this.gateway?.isClosed) {
             logError('[BridgeProvider] Error in gatewayErrorsListener, trying to reconnect:', e);
+            this.onConnectingCallback?.();
             return this.gateway.recreate(this.defaultRetryTimeoutMS);
         }
 
@@ -310,6 +334,7 @@ export class BridgeProvider<TConsumer extends BridgeProviderConsumer> {
 
         logDebug('[BridgeProvider] BridgeGateway created. Connecting to bridge...');
 
+        this.onConnectingCallback?.();
         await this.gateway.registerSession({
             connectingDeadlineMS: options?.connectingDeadlineMS,
             signal: options?.signal,
