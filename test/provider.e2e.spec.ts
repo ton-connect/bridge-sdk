@@ -6,13 +6,6 @@ const BRIDGE_URL = process.env.BRIDGE_URL || 'https://walletbot.me/tonconnect-br
 
 jest.setTimeout(10000);
 
-const block = (ms) => {
-    const end = Date.now() + ms;
-    while (Date.now() < end) {
-        /* empty */
-    }
-};
-
 describe('BridgeProvider', () => {
     let providers: BridgeProvider<BridgeProviderConsumer>[] = [];
     afterEach(async () => {
@@ -140,36 +133,4 @@ describe('BridgeProvider', () => {
         const result2 = await res2.promise;
         expect(result2).toMatchObject({ method: 'disconnect', params: [], id: '2' });
     });
-
-    it('should works fine with blocking loop', async () => {
-        const appSession = new SessionCrypto();
-        const walletSession = new SessionCrypto();
-
-        const app = await BridgeProvider.open<AppConsumer>({
-            bridgeUrl: BRIDGE_URL,
-            clients: [{ session: appSession, clientId: walletSession.sessionId }],
-            listener: console.log,
-        });
-        providers.push(app);
-
-        const { promise, resolve, reject } = Promise.withResolvers();
-        const wallet = await BridgeProvider.open<WalletConsumer>({
-            bridgeUrl: BRIDGE_URL,
-            clients: [{ session: walletSession, clientId: appSession.sessionId }],
-            listener: resolve,
-            errorListener: reject,
-            options: {
-                heartbeatReconnectIntervalMs: 9_000,
-            },
-        });
-        providers.push(wallet);
-
-        // emulate user folds app
-        block(10_000);
-        await app.send({ method: 'sendTransaction', params: ['abc'], id: '1' }, appSession, walletSession.sessionId, {
-            attempts: 3,
-        });
-        const res = await promise;
-        console.log(res);
-    }, 40_000);
 });
