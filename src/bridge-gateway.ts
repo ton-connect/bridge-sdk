@@ -96,6 +96,7 @@ export class BridgeGateway {
         from: string,
         receiver: string,
         options?: {
+            traceId?: string;
             topic?: RpcMethod;
             ttl?: number;
             signal?: AbortSignal;
@@ -107,6 +108,9 @@ export class BridgeGateway {
         url.searchParams.append('ttl', (options?.ttl ?? BridgeGateway.defaultTtl).toString());
         if (options?.topic) {
             url.searchParams.append('topic', options.topic);
+        }
+        if (options?.traceId) {
+            url.searchParams.append('trace_id', options.traceId);
         }
         const body = Base64.encode(message);
 

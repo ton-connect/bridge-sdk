@@ -262,6 +262,7 @@ export class BridgeProvider<TConsumer extends BridgeProviderConsumer> {
         session: SessionCrypto,
         clientSessionId: string,
         options?: {
+            traceId?: string;
             ttl?: number;
             signal?: AbortSignal;
         } & RetryOptions,
@@ -276,6 +277,7 @@ export class BridgeProvider<TConsumer extends BridgeProviderConsumer> {
         await callForSuccess(
             async ({ signal }) => {
                 await BridgeGateway.sendRequest(this.bridgeUrl, encodedRequest, session.sessionId, clientSessionId, {
+                    traceId: options?.traceId,
                     signal,
                     ttl: options?.ttl,
                 });
@@ -347,7 +349,12 @@ export class BridgeProvider<TConsumer extends BridgeProviderConsumer> {
         logDebug('[BridgeProvider] Incoming message decrypted:', request);
 
         this.lastEventId = e.lastEventId;
-        this.listener?.({ lastEventId: e.lastEventId, ...request, from: bridgeIncomingMessage.from });
+        this.listener?.({
+            lastEventId: e.lastEventId,
+            traceId: bridgeIncomingMessage.trace_id,
+            ...request,
+            from: bridgeIncomingMessage.from,
+        });
     }
 
     private async gatewayErrorsListener(e: Event): Promise<void> {
