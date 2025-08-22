@@ -6,10 +6,6 @@ import { logDebug } from '../utils/log';
 export class BridgeSdkError<T = unknown> extends Error {
     private static prefix = '[BRIDGE_SDK_ERROR]';
 
-    protected get info(): string {
-        return '';
-    }
-
     constructor(
         message?: string,
         options?: {
@@ -18,9 +14,7 @@ export class BridgeSdkError<T = unknown> extends Error {
     ) {
         super(message, options);
 
-        this.message = `${BridgeSdkError.prefix} ${this.constructor.name}${
-            this.info ? ': ' + this.info : ''
-        }${message ? '\n' + message : ''}`;
+        this.message = `${BridgeSdkError.prefix} ${message ? '\n' + message : ''}`;
         logDebug(this.message);
 
         Object.setPrototypeOf(this, BridgeSdkError.prototype);

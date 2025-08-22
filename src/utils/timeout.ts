@@ -45,7 +45,7 @@ export function timeout<T>(fn: Deferrable<T>, options?: DeferOptions): Promise<T
     // eslint-disable-next-line no-async-promise-executor
     return new Promise(async (resolve, reject) => {
         if (signal?.aborted) {
-            reject(new BridgeSdkError('Operation aborted'));
+            reject(new BridgeSdkError('Timeout aborted before setTimeout'));
             return;
         }
 
@@ -60,23 +60,27 @@ export function timeout<T>(fn: Deferrable<T>, options?: DeferOptions): Promise<T
         abortController.signal.addEventListener(
             'abort',
             () => {
-                clearTimeout(timeoutId);
-                reject(new BridgeSdkError('Operation aborted'));
+                if (timeoutId) {
+                    clearTimeout(timeoutId);
+                    timeoutId = undefined;
+                    reject(new BridgeSdkError('Timeout aborted after setTimeout'));
+                }
             },
             { once: true },
         );
 
-        const deferOptions = { timeout, abort: abortController.signal };
         await fn(
             (...args) => {
                 clearTimeout(timeoutId);
+                timeoutId = undefined;
                 resolve(...args);
             },
-            () => {
+            (reason?: unknown) => {
                 clearTimeout(timeoutId);
-                reject();
+                timeoutId = undefined;
+                reject(reason);
             },
-            deferOptions,
+            { timeout, signal: abortController.signal },
         );
     });
 }

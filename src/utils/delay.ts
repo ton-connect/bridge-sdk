@@ -18,7 +18,7 @@ export type DelayFnOptions = {
  */
 export async function delay(timeout: number, options?: DelayFnOptions): Promise<void> {
     if (options?.signal?.aborted) {
-        throw new BridgeSdkError('Delay aborted');
+        throw new BridgeSdkError('Delay aborted before setTimeout');
     }
 
     return new Promise((resolve, reject) => {
@@ -27,7 +27,7 @@ export async function delay(timeout: number, options?: DelayFnOptions): Promise<
             'abort',
             () => {
                 clearTimeout(timeoutId);
-                reject(new BridgeSdkError('Delay aborted'));
+                reject(new BridgeSdkError('Delay aborted after setTimeout'));
             },
             { once: true },
         );

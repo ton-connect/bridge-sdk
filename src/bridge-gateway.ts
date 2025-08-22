@@ -130,21 +130,6 @@ export class BridgeGateway {
         return BridgeGateway.sendRequest(this.bridgeUrl, message, from, receiver, options);
     }
 
-    public async pause(): Promise<void> {
-        await this.eventSource.dispose().catch((e) => {
-            logError('[BridgeGateway] Failed to pause connection:', e);
-        });
-    }
-
-    public async recreate(delayMs: number): Promise<void> {
-        await this.eventSource.recreate(delayMs);
-    }
-
-    public async unPause(): Promise<void> {
-        const RECREATE_WITHOUT_DELAY = 0;
-        await this.eventSource.recreate(RECREATE_WITHOUT_DELAY);
-    }
-
     public async close(): Promise<void> {
         await this.eventSource.dispose().catch((e) => {
             logError('[BridgeGateway] Failed to close connection:', e);
@@ -252,7 +237,7 @@ async function createEventSource(config: CreateEventSourceConfig): Promise<Event
             logDebug('[BridgeGateway] Connecting to bridge SSE...');
 
             if (signal?.aborted) {
-                reject(new BridgeSdkError('Bridge connection aborted'));
+                reject(new BridgeSdkError('Bridge connection aborted before connection'));
                 return;
             }
 
@@ -267,7 +252,7 @@ async function createEventSource(config: CreateEventSourceConfig): Promise<Event
             }
 
             if (signal?.aborted) {
-                reject(new BridgeSdkError('Bridge connection aborted'));
+                reject(new BridgeSdkError('Bridge connection aborted after building url'));
                 return;
             }
 
@@ -277,21 +262,22 @@ async function createEventSource(config: CreateEventSourceConfig): Promise<Event
 
             let wasPreviouslyOpened = false;
             eventSource.onerror = async (reason: Event): Promise<void> => {
-                logError('[BridgeGateway] EventSource error occurred:', reason);
+                logDebug('[BridgeGateway] EventSource error occurred:', JSON.stringify(reason));
 
                 if (signal?.aborted) {
                     eventSource.close();
-                    reject(new BridgeSdkError('Bridge connection aborted'));
+                    reject(new BridgeSdkError('Bridge connection aborted on error callback'));
                     return;
                 }
 
                 if (!wasPreviouslyOpened) {
                     eventSource.close();
-                    reject(new BridgeSdkError(`Bridge error before connecting...`));
+                    reject(new BridgeSdkError(`Bridge error before connecting`));
                     return;
                 }
 
                 try {
+                    eventSource.close();
                     await config.errorHandler(eventSource, reason);
                 } catch (e) {
                     eventSource.close();
@@ -302,7 +288,7 @@ async function createEventSource(config: CreateEventSourceConfig): Promise<Event
             eventSource.onopen = (): void => {
                 if (signal?.aborted) {
                     eventSource.close();
-                    reject(new BridgeSdkError('Bridge connection aborted'));
+                    reject(new BridgeSdkError('Bridge connection aborted on open'));
                     return;
                 }
 
@@ -314,7 +300,7 @@ async function createEventSource(config: CreateEventSourceConfig): Promise<Event
             eventSource.onmessage = (event: MessageEvent<string>): void => {
                 if (signal?.aborted) {
                     eventSource.close();
-                    reject(new BridgeSdkError('Bridge connection aborted'));
+                    reject(new BridgeSdkError('Bridge connection aborted on message'));
                     return;
                 }
 
@@ -322,10 +308,14 @@ async function createEventSource(config: CreateEventSourceConfig): Promise<Event
                 config.messageHandler(event);
             };
 
-            config.signal?.addEventListener('abort', () => {
-                eventSource.close();
-                reject(new BridgeSdkError('Bridge connection aborted'));
-            });
+            config.signal?.addEventListener(
+                'abort',
+                () => {
+                    eventSource.close();
+                    reject(new BridgeSdkError('Bridge connection aborted'));
+                },
+                { once: true },
+            );
         },
         { timeout: config.connectingDeadlineMS, signal: config.signal },
     );

@@ -70,12 +70,9 @@ export async function callForSuccess<T extends (options: { signal?: AbortSignal 
             i++;
 
             if (i < attempts) {
-                await delay(delayMs);
+                await delay(delayMs, { signal });
                 if (options?.exponential) {
-                    delayMs *= 2;
-                    if (options.maxDelayMs !== undefined) {
-                        delayMs = Math.min(options.maxDelayMs, delayMs);
-                    }
+                    delayMs = Math.min(delayMs * 2, options.maxDelayMs ?? Number.MAX_SAFE_INTEGER);
                 }
             }
         }

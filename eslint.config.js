@@ -11,4 +11,10 @@ module.exports = [
             },
         },
     },
+    {
+        files: ['**/*.spec.ts'],
+        rules: {
+            'no-console': 'off',
+        },
+    },
 ];

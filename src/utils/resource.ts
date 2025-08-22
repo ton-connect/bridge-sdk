@@ -1,5 +1,4 @@
 import { BridgeSdkError } from '../errors/bridge-sdk.error';
-import { delay } from './delay';
 import { createAbortController } from './create-abort-controller';
 
 /**
@@ -20,11 +19,6 @@ export type Resource<T, Args extends unknown[]> = {
      * Dispose the current resource.
      */
     dispose: () => Promise<void>;
-
-    /**
-     * Recreate the current resource.
-     */
-    recreate: (delayMs: number) => Promise<T>;
 };
 
 /**
@@ -41,23 +35,17 @@ export function createResource<T extends EventSource, Args extends unknown[]>(
     disposeFn: (resource: T) => Promise<void>,
 ): Resource<T, Args> {
     let currentResource: T | null = null;
-    let currentArgs: Args | null = null;
     let currentPromise: Promise<T> | null = null;
-    let currentSignal: AbortSignal | undefined = undefined;
     let abortController: AbortController | null = null;
 
     // create a new resource
     const create = async (signal?: AbortSignal, ...args: Args): Promise<T> => {
-        currentSignal = signal ?? undefined;
-
         abortController?.abort();
         abortController = createAbortController(signal);
 
         if (abortController.signal.aborted) {
             throw new BridgeSdkError('Resource creation was aborted');
         }
-
-        currentArgs = args ?? null;
 
         const promise = createFn(abortController.signal, ...args);
         currentPromise = promise;
@@ -101,31 +89,9 @@ export function createResource<T extends EventSource, Args extends unknown[]>(
         }
     };
 
-    // recreate the current resource
-    const recreate = async (delayMs: number): Promise<T> => {
-        const resource = currentResource;
-        const promise = currentPromise;
-        const args = currentArgs;
-        const signal = currentSignal;
-
-        await delay(delayMs, { signal });
-
-        if (
-            resource === currentResource &&
-            promise === currentPromise &&
-            args === currentArgs &&
-            signal === currentSignal
-        ) {
-            return await create(currentSignal!, ...((args ?? []) as Args));
-        }
-
-        throw new BridgeSdkError('Resource recreation was aborted by a new resource creation');
-    };
-
     return {
         create,
         current,
         dispose,
-        recreate,
     };
 }

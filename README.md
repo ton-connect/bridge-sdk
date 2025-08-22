@@ -113,7 +113,7 @@ const wallet = await BridgeProvider.open<WalletConsumer>({
     console.log('Received from app:', event);
     // handle event according to TON Connect protocol
   },
-  options: { lastEventId, heartbeatReconnectInterval: 15000 },
+  options: { lastEventId, heartbeatReconnectIntervalMs: 15000 },
 });
 
 // ... use wallet, then:
