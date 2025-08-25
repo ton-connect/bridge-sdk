@@ -1,5 +1,5 @@
 {
-  "name": "bridge-sdk",
+  "name": "@tonconnect/bridge-sdk",
   "version": "0.2.4",
   "main": "dist/index.js",
   "module": "./dist/index.mjs",
@@ -16,7 +16,7 @@
       }
     }
   },
-  "repository": "https://github.com/Alejandbel/bridge-sdk",
+  "repository": "https://github.com/ton-connect/bridge-sdk",
   "author": "TonTech",
   "prettier": "@ton/toolchain/prettier",
   "files": [
