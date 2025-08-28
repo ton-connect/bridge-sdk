@@ -226,6 +226,7 @@ export class BridgeProvider<TConsumer extends BridgeProviderConsumer> {
             await this.closeGateway();
         } catch (err) {
             logDebug('[BridgeProvider] Error closing gateway:', JSON.stringify(err));
+            this.errorListener?.(err);
         }
 
         if (signal.aborted) {
@@ -311,6 +312,7 @@ export class BridgeProvider<TConsumer extends BridgeProviderConsumer> {
                 value();
             } catch (error) {
                 logError(`[BridgeProvider] Error during onConnecting callback: ${JSON.stringify(error)}`, error);
+                this.errorListener?.(error);
             }
         };
     }
@@ -334,7 +336,8 @@ export class BridgeProvider<TConsumer extends BridgeProviderConsumer> {
         try {
             bridgeIncomingMessage = JSON.parse(e.data);
         } catch {
-            throw new BridgeSdkError(`Failed to parse message: ${e.data}`);
+            this.errorListener?.(new BridgeSdkError(`Failed to parse message: ${e.data}`));
+            return;
         }
 
         const sessionCrypto = this.getCryptoSession(bridgeIncomingMessage.from);
@@ -367,6 +370,7 @@ export class BridgeProvider<TConsumer extends BridgeProviderConsumer> {
             } catch (error) {
                 abortController.abort();
                 logDebug('[BridgeProvider] Error in gatewayErrorsListener after reconnect:', error);
+                this.errorListener?.(error);
             }
         }
 
