@@ -126,6 +126,7 @@ export class BridgeGateway {
         from: string,
         receiver: string,
         options?: {
+            traceId?: string;
             topic?: RpcMethod;
             ttl?: number;
             signal?: AbortSignal;

@@ -264,6 +264,7 @@ export class BridgeProvider<TConsumer extends BridgeProviderConsumer> {
         clientSessionId: string,
         options?: {
             traceId?: string;
+            topic?: RpcMethod;
             ttl?: number;
             signal?: AbortSignal;
         } & RetryOptions,
@@ -275,10 +276,12 @@ export class BridgeProvider<TConsumer extends BridgeProviderConsumer> {
 
         const encodedRequest = session.encrypt(JSON.stringify(message), hexToByteArray(clientSessionId));
 
+        const topic = options?.topic ?? ('method' in message ? message.method : undefined);
         await callForSuccess(
             async ({ signal }) => {
                 await BridgeGateway.sendRequest(this.bridgeUrl, encodedRequest, session.sessionId, clientSessionId, {
                     traceId: options?.traceId,
+                    topic,
                     signal,
                     ttl: options?.ttl,
                 });
