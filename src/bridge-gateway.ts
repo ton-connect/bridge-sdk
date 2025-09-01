@@ -1,8 +1,8 @@
 import { Base64, RpcMethod } from '@tonconnect/protocol';
+import { EventSource } from 'eventsource';
 
 import { BridgeSdkError } from './errors/bridge-sdk.error';
 import { addPathToUrl } from './utils/url';
-import '@tonconnect/isomorphic-eventsource';
 import '@tonconnect/isomorphic-fetch';
 import { logDebug, logError } from './utils/log';
 import { createResource } from './utils/resource';
