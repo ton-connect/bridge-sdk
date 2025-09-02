@@ -1,11 +1,14 @@
-import { randomUUID } from 'node:crypto';
-
-import { Base64 } from '@tonconnect/protocol';
+import { Base64, SessionCrypto } from '@tonconnect/protocol';
 
 import { BridgeGateway } from '../src';
 import { delay } from '../src/utils/delay';
 
 const BRIDGE_URL = process.env.BRIDGE_URL || 'https://walletbot.me/tonconnect-bridge/bridge';
+
+function randomSessionId() {
+    const session = new SessionCrypto();
+    return session.sessionId;
+}
 
 describe('BridgeGateway', () => {
     let sender: BridgeGateway;
@@ -13,7 +16,7 @@ describe('BridgeGateway', () => {
     let senderSession: string;
 
     async function getBridgeLastEventId(): Promise<string> {
-        const session = randomUUID();
+        const session = randomSessionId();
         const { promise, resolve, reject } = Promise.withResolvers<MessageEvent<string>>();
         receiver = await BridgeGateway.open({
             bridgeUrl: BRIDGE_URL,
@@ -32,7 +35,7 @@ describe('BridgeGateway', () => {
     }
 
     beforeEach(async () => {
-        senderSession = randomUUID();
+        senderSession = randomSessionId();
         sender = await BridgeGateway.open({
             bridgeUrl: BRIDGE_URL,
             sessionIds: [senderSession],
@@ -52,7 +55,7 @@ describe('BridgeGateway', () => {
     });
 
     it('should connect and close', async () => {
-        const session = randomUUID();
+        const session = randomSessionId();
         const gateway = await BridgeGateway.open({
             bridgeUrl: BRIDGE_URL,
             sessionIds: [session],
@@ -66,7 +69,7 @@ describe('BridgeGateway', () => {
     });
 
     it('should receive a message over an open bridge connection', async () => {
-        const receiverSession = randomUUID();
+        const receiverSession = randomSessionId();
 
         const { promise, resolve, reject } = Promise.withResolvers<MessageEvent<string>>();
         receiver = await BridgeGateway.open({
@@ -88,7 +91,7 @@ describe('BridgeGateway', () => {
     });
 
     it('should not receive a message after reconnecting with updated lastEventId', async () => {
-        const session = randomUUID();
+        const session = randomSessionId();
 
         const res1 = Promise.withResolvers<MessageEvent<string>>();
         receiver = await BridgeGateway.open({
@@ -120,7 +123,7 @@ describe('BridgeGateway', () => {
     });
 
     it('should receive a message again after reconnecting with valid lastEventId', async () => {
-        const session = randomUUID();
+        const session = randomSessionId();
 
         const res1 = Promise.withResolvers<MessageEvent<string>>();
         receiver = await BridgeGateway.open({
@@ -158,7 +161,7 @@ describe('BridgeGateway', () => {
     });
 
     it('should not receive a message sent while disconnected if reconnecting with updated lastEventId', async () => {
-        const session = randomUUID();
+        const session = randomSessionId();
 
         await sender.send(Buffer.from('Offline message'), senderSession, session);
 
@@ -179,7 +182,7 @@ describe('BridgeGateway', () => {
     });
 
     it('should receive a message sent while disconnected if reconnecting without lastEventId', async () => {
-        const session = randomUUID();
+        const session = randomSessionId();
 
         await sender.send(Buffer.from('Delivered later'), senderSession, session);
 
@@ -199,7 +202,7 @@ describe('BridgeGateway', () => {
     });
 
     it('should not receive message after ttl expired', async () => {
-        const session = randomUUID();
+        const session = randomSessionId();
 
         await sender.send(Buffer.from('Expiring message'), senderSession, session, { ttl: 1 });
 
@@ -218,7 +221,7 @@ describe('BridgeGateway', () => {
     });
 
     it('should receive multiple messages in order', async () => {
-        const receiverSession = randomUUID();
+        const receiverSession = randomSessionId();
 
         const { promise, resolve, reject } = Promise.withResolvers<MessageEvent<string>[]>();
 
