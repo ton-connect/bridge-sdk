@@ -33,7 +33,9 @@
   "dependencies": {
     "@tonconnect/isomorphic-eventsource": "^0.0.2",
     "@tonconnect/isomorphic-fetch": "^0.0.3",
-    "@tonconnect/protocol": "^2.3.0"
+    "@tonconnect/protocol": "^2.3.0",
+    "blakejs": "^1.2.1",
+    "tweetnacl": "^1.0.3"
   },
   "devDependencies": {
     "@ton/toolchain": "the-ton-tech/toolchain#v1.4.0",
@@ -47,8 +49,13 @@
     "typescript": "^5.8.3"
   },
   "tsup": {
-    "entry": ["src/index.ts"],
-    "format": ["esm", "cjs"],
+    "entry": [
+      "src/index.ts"
+    ],
+    "format": [
+      "esm",
+      "cjs"
+    ],
     "dts": true,
     "sourcemap": false,
     "minify": true,

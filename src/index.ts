@@ -13,6 +13,7 @@ export {
     BridgeAppEvent,
     BridgeWalletEvent,
     BridgeMessages,
+    BridgeRequestSource,
 } from './models/bridge-messages';
 export { ClientConnection } from './models/client-connection';
 

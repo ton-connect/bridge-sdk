@@ -11,9 +11,12 @@ import {
     BridgeMessages,
     BridgeProviderConsumer,
     BridgeIncomingMessage,
+    BridgeRequestSource,
+    BridgeRequestSourceRaw,
 } from './models/bridge-messages';
 import { distinct, equalsDistinct } from './utils/arrays';
 import { delay } from './utils/delay';
+import { openAnonymous } from './utils/crypto';
 
 export type BridgeProviderOpenParams<TConsumer extends BridgeProviderConsumer> = {
     /** Bridge base URL without trailing slash. */
@@ -357,6 +360,33 @@ export class BridgeProvider<TConsumer extends BridgeProviderConsumer> {
         return client.session;
     }
 
+    private loadMaybeSource(
+        session: SessionCrypto,
+        requestSourceEncrypted: string | undefined,
+    ): BridgeRequestSource | undefined {
+        if (!requestSourceEncrypted) {
+            return undefined;
+        }
+
+        const decrypted = openAnonymous(
+            Base64.decode(requestSourceEncrypted).toUint8Array(),
+            hexToByteArray(session.sessionId),
+            hexToByteArray(session.stringifyKeypair().secretKey),
+        );
+        if (!decrypted) {
+            throw new Error('Decrypt error ');
+        }
+
+        let requestSource: BridgeRequestSourceRaw = JSON.parse(new TextDecoder().decode(decrypted));
+
+        return {
+            origin: requestSource.origin,
+            ip: requestSource.ip,
+            time: requestSource.time,
+            userAgent: requestSource.user_agent,
+        };
+    }
+
     private async gatewayListener(e: MessageEvent<string>): Promise<void> {
         if (e.data === this.heartbeatMessage) {
             this.lastHeartbeatAt = Date.now();
@@ -380,6 +410,7 @@ export class BridgeProvider<TConsumer extends BridgeProviderConsumer> {
                 hexToByteArray(bridgeIncomingMessage.from),
             ),
         );
+        const requestSource = this.loadMaybeSource(sessionCrypto, bridgeIncomingMessage.request_source);
 
         logDebug('[BridgeProvider] Incoming message decrypted:', request);
 
@@ -389,6 +420,8 @@ export class BridgeProvider<TConsumer extends BridgeProviderConsumer> {
             traceId: bridgeIncomingMessage.trace_id,
             ...request,
             from: bridgeIncomingMessage.from,
+            requestSource,
+            connectSource: bridgeIncomingMessage.connect_source,
         });
     }
 

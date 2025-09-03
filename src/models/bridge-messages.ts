@@ -1,6 +1,12 @@
 import { AppRequest, ConnectEvent, DisconnectEvent, RpcMethod, WalletResponse } from '@tonconnect/protocol';
 
-export type BridgeSharedEvent = { lastEventId: string; from: string; traceId?: string };
+export type BridgeSharedEvent = {
+    lastEventId: string;
+    from: string;
+    traceId?: string;
+    requestSource?: BridgeRequestSource;
+    connectSource?: string;
+};
 export type BridgeAppEvent = AppRequest<RpcMethod> & BridgeSharedEvent;
 export type BridgeWalletEvent = WalletResponse<RpcMethod> & BridgeSharedEvent;
 
@@ -25,4 +31,20 @@ export type BridgeIncomingMessage = {
     from: string;
     trace_id?: string;
     message: string;
+    request_source?: string;
+    connect_source?: string;
+};
+
+export type BridgeRequestSource = {
+    origin: string;
+    ip: string;
+    time: string;
+    userAgent: string;
+};
+
+export type BridgeRequestSourceRaw = {
+    origin: string;
+    ip: string;
+    time: string;
+    user_agent: string;
 };
