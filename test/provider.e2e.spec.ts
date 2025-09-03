@@ -91,6 +91,51 @@ describe('BridgeProvider', () => {
         expect(result2).toMatchObject({ method: 'disconnect', params: [], id: '2' });
     });
 
+    it('updateClients should do nothing if clients unchanged, and reconnect when changed', async () => {
+        const appSession = new SessionCrypto();
+        const walletSession = new SessionCrypto();
+
+        const app = await BridgeProvider.open<AppConsumer>({
+            bridgeUrl: BRIDGE_URL,
+            clients: [{ session: appSession, clientId: walletSession.sessionId }],
+            listener: console.log,
+        });
+        providers.push(app);
+
+        let connectAttempts = 0;
+        app.onConnecting = () => (connectAttempts += 1);
+        await app.updateClients([{ session: appSession, clientId: walletSession.sessionId }]);
+
+        // should not reconnect
+        expect(connectAttempts).toBe(0);
+
+        const app2Session = new SessionCrypto();
+        const wallet2Session = new SessionCrypto();
+
+        await app.updateClients([
+            { session: appSession, clientId: walletSession.sessionId },
+            { session: app2Session, clientId: wallet2Session.sessionId },
+        ]);
+
+        // should connect
+        expect(connectAttempts).toBeGreaterThan(0);
+
+        const res = Promise.withResolvers();
+        const wallet2 = await BridgeProvider.open<WalletConsumer>({
+            bridgeUrl: BRIDGE_URL,
+            clients: [{ session: wallet2Session, clientId: app2Session.sessionId }],
+            listener: res.resolve,
+        });
+        providers.push(wallet2);
+
+        await app.send({ method: 'disconnect', params: [], id: '2' }, app2Session, wallet2Session.sessionId, {
+            attempts: 3,
+        });
+
+        const msg = await res.promise;
+        expect(msg).toMatchObject({ method: 'disconnect', id: '2' });
+    });
+
     it('should receive message after reconnect', async () => {
         const appSession = new SessionCrypto();
         const walletSession = new SessionCrypto();

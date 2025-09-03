@@ -12,36 +12,47 @@ import {
     BridgeProviderConsumer,
     BridgeIncomingMessage,
 } from './models/bridge-messages';
-import { distinct } from './utils/distinct';
+import { distinct, equalsDistinct } from './utils/arrays';
 import { delay } from './utils/delay';
 
-/**
- * Parameters for opening a `BridgeProvider`.
- */
 export type BridgeProviderOpenParams<TConsumer extends BridgeProviderConsumer> = {
-    /** Bridge base URL (without trailing slash for SSE/message endpoints). */
+    /** Bridge base URL without trailing slash. */
     bridgeUrl: string;
+
     /** Connected clients for this provider: pairs of our `SessionCrypto` and remote `clientId`. */
     clients: ClientConnection[];
+
     /** Listener for decrypted bridge events. */
     listener?: BridgeEventListeners[TConsumer];
+
     /** Error listener for unhandled/unexpected errors. */
     errorListener?: (error: unknown) => void;
+
     /**
      * Called when the provider starts (re)connecting to the bridge.
-     * Prefer this over legacy `onConnect`.
      */
     onConnecting?: () => void;
+
     options?: {
         /** Resume from this last event id (to avoid missing messages). */
         lastEventId?: string;
+
         /**
-         * Deadline for establishing SSE connection in milliseconds.
-         * Alias: `connectingDeadlineMs` is also accepted.
+         * The delay in milliseconds. If exponential strategy used it doubles every failure. Default is 100ms.
          */
+        delayMs?: number;
+
+        /**
+         * The maximum delay in milliseconds when using exponential backoff.
+         * The delay will not exceed this value, even if doubling would result in a higher delay.
+         */
+        maxDelayMs?: number;
+
         connectingDeadlineMs?: number;
+
         /** Abort signal to cancel open/restore. */
         signal?: AbortSignal;
+
         /** Whether to use exponential backoff for retries. */
         exponential?: boolean;
         /**
@@ -72,6 +83,7 @@ export class BridgeProvider<TConsumer extends BridgeProviderConsumer> {
     private connectionOptions?: {
         connectingDeadlineMs?: number;
     } & Omit<RetryOptions, 'attempts'> = {};
+
     /**
      * Creates and opens a `BridgeProvider` instance.
      * Automatically performs connection with provided clients and options.
@@ -156,7 +168,6 @@ export class BridgeProvider<TConsumer extends BridgeProviderConsumer> {
                 return;
             }
 
-            this.stopHeartbeatWatcher();
             logDebug(`[BridgeProvider] No heartbeat for ${elapsedAfterDelay}ms, reconnecting...`);
 
             try {
@@ -199,7 +210,12 @@ export class BridgeProvider<TConsumer extends BridgeProviderConsumer> {
 
         this.clients = clients;
         this.lastEventId = options?.lastEventId;
-        this.connectionOptions = options;
+        this.connectionOptions = {
+            connectingDeadlineMs: options?.connectingDeadlineMs,
+            delayMs: options?.delayMs,
+            maxDelayMs: options?.maxDelayMs,
+            exponential: options?.exponential,
+        };
 
         logDebug('[BridgeProvider] Restoring connection...');
         const abortController = createAbortController(options?.signal);
@@ -219,6 +235,19 @@ export class BridgeProvider<TConsumer extends BridgeProviderConsumer> {
         }
 
         this.startHeartbeatWatcher(options?.signal);
+    }
+
+    public async updateClients(clients: ClientConnection[], options?: { signal?: AbortSignal }): Promise<void> {
+        const previousIds = this.clients.map((client) => client.session.sessionId);
+        const newIds = clients.map((client) => client.session.sessionId);
+
+        if (equalsDistinct(previousIds, newIds)) {
+            return;
+        }
+
+        this.clients = clients;
+
+        await this.restoreConnection(clients, { ...this.connectionOptions, signal: options?.signal });
     }
 
     private async reconnect(signal: AbortSignal) {
