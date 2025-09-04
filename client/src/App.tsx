@@ -59,7 +59,8 @@ function App() {
         clients: appClients,
         listener: appListener as any,
         errorListener,
-        onConnect: () => appendLog('app connecting...'),
+        onConnecting: () => appendLog('app connecting...'),
+        onQueueDone: () => appendLog('app queue done.'),
         options: {
           heartbeatReconnectIntervalMs: heartbeatMs,
         }
@@ -70,7 +71,8 @@ function App() {
         clients: walletClients,
         listener: walletListener as any,
         errorListener,
-        onConnect: () => appendLog('wallet connecting...'),
+        onConnecting: () => appendLog('wallet connecting...'),
+        onQueueDone: () => appendLog('wallet queue done.'),
         options: {
           heartbeatReconnectIntervalMs: heartbeatMs,
         }
