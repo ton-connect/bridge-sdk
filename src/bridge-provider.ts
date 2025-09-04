@@ -36,6 +36,11 @@ export type BridgeProviderOpenParams<TConsumer extends BridgeProviderConsumer> =
      */
     onConnecting?: () => void;
 
+    /**
+     * Called when the `queue_done` message received
+     */
+    onQueueDone?: () => void;
+
     options?: {
         /** Resume from this last event id (to avoid missing messages). */
         lastEventId?: string;
@@ -73,8 +78,11 @@ export class BridgeProvider<TConsumer extends BridgeProviderConsumer> {
     private gateway: BridgeGateway | null = null;
 
     private onConnectingCallback?: () => void;
+    private onQueueDoneCallback?: () => void;
 
     private readonly heartbeatMessage = 'heartbeat';
+    private readonly queueEndMessage = 'queue_done';
+
     private readonly defaultConnectingDeadlineMS = 14_000;
     private readonly defaultRetryDelayMs = 1_000;
     private readonly defaultMaxExponentialDelayMS = 7_000;
@@ -101,6 +109,7 @@ export class BridgeProvider<TConsumer extends BridgeProviderConsumer> {
             params.options?.heartbeatReconnectIntervalMs,
         );
         if (params.onConnecting) provider.onConnecting = params.onConnecting;
+        if (params.onQueueDone) provider.onQueueDone = params.onQueueDone;
         try {
             await provider.restoreConnection(params.clients, params.options);
             return provider;
@@ -341,6 +350,17 @@ export class BridgeProvider<TConsumer extends BridgeProviderConsumer> {
         this.listener = callback;
     }
 
+    public set onQueueDone(value: () => void) {
+        this.onQueueDoneCallback = () => {
+            try {
+                value();
+            } catch (error) {
+                logError(`[BridgeProvider] Error during onQueueDone callback: ${JSON.stringify(error)}`, error);
+                this.errorListener?.(error);
+            }
+        };
+    }
+
     public set onConnecting(value: () => void) {
         this.onConnectingCallback = () => {
             try {
@@ -390,6 +410,10 @@ export class BridgeProvider<TConsumer extends BridgeProviderConsumer> {
     private async gatewayListener(e: MessageEvent<string>): Promise<void> {
         if (e.data === this.heartbeatMessage) {
             this.lastHeartbeatAt = Date.now();
+            return;
+        }
+        if (e.data === this.queueEndMessage) {
+            this.onQueueDoneCallback?.();
             return;
         }
         logDebug(`[BridgeProvider] Message received. Event ID: ${e.lastEventId}`);
@@ -476,6 +500,7 @@ export class BridgeProvider<TConsumer extends BridgeProviderConsumer> {
             this.gatewayErrorsListener.bind(this),
             this.lastEventId,
             'message',
+            true,
         );
 
         logDebug('[BridgeProvider] BridgeGateway created. Connecting to bridge...');

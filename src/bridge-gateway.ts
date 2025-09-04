@@ -17,6 +17,7 @@ export type BridgeGatewayOpenParams = {
     lastEventId?: string;
     options?: RegisterSessionOptions;
     heartbeatFormat?: HeartbeatFormat;
+    enableQueueDoneEvent?: boolean;
 };
 
 export class BridgeGateway {
@@ -26,7 +27,7 @@ export class BridgeGateway {
 
     private eventSource = createResource(
         async (signal?: AbortSignal, connectingDeadlineMS?: number): Promise<EventSource> => {
-            const eventSourceConfig = {
+            return await createEventSource({
                 bridgeUrl: this.bridgeUrl,
                 ssePath: BridgeGateway.ssePath,
                 sessionIds: this.sessionIds,
@@ -36,8 +37,8 @@ export class BridgeGateway {
                 connectingDeadlineMS: connectingDeadlineMS,
                 lastEventId: this.lastEventId,
                 heartbeatFormat: this.heartbeatFormat,
-            };
-            return await createEventSource(eventSourceConfig);
+                enableQueueDoneEvent: this.enableQueueDoneEvent,
+            });
         },
         async (resource: EventSource) => {
             resource.close();
@@ -66,6 +67,7 @@ export class BridgeGateway {
         private errorsListener: (err: Event) => void,
         private readonly lastEventId?: string,
         private readonly heartbeatFormat?: HeartbeatFormat,
+        private readonly enableQueueDoneEvent?: boolean,
     ) {}
 
     static async open(params: BridgeGatewayOpenParams) {
@@ -76,6 +78,7 @@ export class BridgeGateway {
             params.errorsListener,
             params.lastEventId,
             params.heartbeatFormat,
+            params.enableQueueDoneEvent,
         );
         try {
             await bridgeGateway.registerSession(params.options);
@@ -226,6 +229,8 @@ export type CreateEventSourceConfig = {
     lastEventId?: string;
 
     heartbeatFormat?: HeartbeatFormat;
+
+    enableQueueDoneEvent?: boolean;
 };
 
 /**
@@ -233,7 +238,7 @@ export type CreateEventSourceConfig = {
  * @param {CreateEventSourceConfig} config - Configuration for creating an event source.
  */
 async function createEventSource(config: CreateEventSourceConfig): Promise<EventSource> {
-    let { lastEventId, heartbeatFormat } = config;
+    let { lastEventId, heartbeatFormat, enableQueueDoneEvent } = config;
 
     return await timeout(
         async (resolve, reject, deferOptions) => {
@@ -254,6 +259,9 @@ async function createEventSource(config: CreateEventSourceConfig): Promise<Event
             }
             if (heartbeatFormat) {
                 url.searchParams.append('heartbeat', heartbeatFormat);
+            }
+            if (enableQueueDoneEvent) {
+                url.searchParams.append('enable_queue_done_event', 'true');
             }
 
             if (signal?.aborted) {
