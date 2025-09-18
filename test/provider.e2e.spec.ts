@@ -4,8 +4,6 @@ import { AppConsumer, WalletConsumer, BridgeProvider, BridgeProviderConsumer, Br
 
 const BRIDGE_URL = process.env.BRIDGE_URL || 'https://walletbot.me/tonconnect-bridge/bridge';
 
-jest.setTimeout(10000);
-
 describe('BridgeProvider', () => {
     let providers: BridgeProvider<BridgeProviderConsumer>[] = [];
     afterEach(async () => {
