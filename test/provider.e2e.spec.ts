@@ -1,10 +1,9 @@
+import { describe, afterEach, it, expect } from 'vitest';
 import { SessionCrypto } from '@tonconnect/protocol';
 
 import { AppConsumer, WalletConsumer, BridgeProvider, BridgeProviderConsumer, BridgeAppEvent } from '../src';
 
 const BRIDGE_URL = process.env.BRIDGE_URL || 'https://walletbot.me/tonconnect-bridge/bridge';
-
-jest.setTimeout(10000);
 
 describe('BridgeProvider', () => {
     let providers: BridgeProvider<BridgeProviderConsumer>[] = [];
