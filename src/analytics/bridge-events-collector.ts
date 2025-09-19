@@ -26,8 +26,15 @@ export class BridgeEventsCollector {
     }
 
     emit(event: Partial<Event>): void {
+        const { bridgeUrl, userId, subsystem, clientEnvironment, networkId, version } = this.options.sharedEventData;
+
         const enrichedEvent: Event = {
-            ...this.options.sharedEventData,
+            bridge_url: bridgeUrl,
+            user_id: userId,
+            subsystem,
+            client_environment: clientEnvironment,
+            network_id: networkId,
+            version,
             ...event,
             event_id: event.event_id || uuidV4(),
             client_timestamp: event.client_timestamp || Math.floor(Date.now() / 1000),

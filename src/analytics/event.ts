@@ -1,3 +1,5 @@
+import { CHAIN } from '@tonconnect/protocol';
+
 import {
     BridgeConnectErrorEvent,
     BridgeConnectEstablishedEvent,
@@ -19,7 +21,17 @@ export type Event =
     | BridgeResponseDecodeErrorEvent
     | BridgeResponseReceivedEvent;
 
-export type SharedEventData = Pick<
-    Event,
-    'client_environment' | 'network_id' | 'subsystem' | 'version' | 'user_id' | 'bridge_url'
->;
+export type SharedEventData = {
+    /**
+     * The client environment.
+     */
+    clientEnvironment: string;
+    /**
+     * Network id (-239 for the mainnet and -3 for the testnet)
+     */
+    networkId: CHAIN;
+    subsystem: 'dapp' | 'bridge' | 'wallet';
+    version: string;
+    userId?: string;
+    bridgeUrl: string;
+};

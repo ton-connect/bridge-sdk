@@ -1,7 +1,7 @@
-import { describe, afterEach, it, expect } from 'vitest';
+import { afterEach, describe, expect, it } from 'vitest';
 import { SessionCrypto } from '@tonconnect/protocol';
 
-import { AppConsumer, WalletConsumer, BridgeProvider, BridgeProviderConsumer, BridgeAppEvent } from '../src';
+import { AppConsumer, BridgeAppEvent, BridgeProvider, BridgeProviderConsumer, WalletConsumer } from '../src';
 
 const BRIDGE_URL = process.env.BRIDGE_URL || 'https://walletbot.me/tonconnect-bridge/bridge';
 
@@ -20,14 +20,6 @@ describe('BridgeProvider', () => {
             bridgeUrl: BRIDGE_URL,
             clients: [{ session: appSession, clientId: walletSession.sessionId }],
             listener: console.log,
-            analytics: {
-                sharedEventData: {
-                    client_environment: 'app',
-                    network_id: '-239',
-                    subsystem: 'dapp',
-                    version: '1.0.0',
-                },
-            },
         });
         providers.push(app);
 

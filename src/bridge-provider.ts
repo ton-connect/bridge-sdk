@@ -72,7 +72,7 @@ export type BridgeProviderOpenParams<TConsumer extends BridgeProviderConsumer> =
     };
 
     analytics?: {
-        sharedEventData: Omit<SharedEventData, 'bridge_url'>;
+        sharedEventData: Omit<SharedEventData, 'bridgeUrl'>;
         options?: Omit<BridgeEventsCollectorOptions, 'sharedEventData'>;
     };
 };
@@ -139,14 +139,14 @@ export class BridgeProvider<TConsumer extends BridgeProviderConsumer> {
         private errorListener: ((error: unknown) => void) | null = null,
         private heartbeatReconnectIntervalMs: number | undefined = undefined,
         analytics?: {
-            sharedEventData: Omit<SharedEventData, 'bridge_url'>;
+            sharedEventData: Omit<SharedEventData, 'bridgeUrl'>;
             options?: Omit<BridgeEventsCollectorOptions, 'sharedEventData'>;
         },
     ) {
         if (analytics?.sharedEventData) {
             const sharedData: SharedEventData = {
                 ...analytics.sharedEventData,
-                bridge_url: bridgeUrl,
+                bridgeUrl,
                 // TODO?: version use bridge sdk version or wallet?
             };
 
@@ -396,6 +396,7 @@ export class BridgeProvider<TConsumer extends BridgeProviderConsumer> {
         this.stopHeartbeatWatcher();
         this.lastEventId = undefined;
         this.clients = [];
+        await this.analytics?.flush();
         logDebug('[BridgeProvider] Closed.');
     }
 
