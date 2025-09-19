@@ -1,3 +1,4 @@
+import { describe, afterEach, it, expect } from 'vitest';
 import { SessionCrypto } from '@tonconnect/protocol';
 
 import { AppConsumer, BridgeProvider, BridgeProviderConsumer, WalletConsumer } from '../src';

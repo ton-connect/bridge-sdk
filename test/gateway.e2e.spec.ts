@@ -1,3 +1,4 @@
+import { describe, afterEach, beforeEach, it, expect } from 'vitest';
 import { Base64, SessionCrypto } from '@tonconnect/protocol';
 
 import { BridgeGateway } from '../src';
