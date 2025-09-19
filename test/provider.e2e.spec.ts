@@ -21,6 +21,14 @@ describe('BridgeProvider', () => {
             bridgeUrl: BRIDGE_URL,
             clients: [{ session: appSession, clientId: walletSession.sessionId }],
             listener: console.log,
+            analytics: {
+                sharedEventData: {
+                    client_environment: 'app',
+                    network_id: '-239',
+                    subsystem: 'dapp',
+                    version: '1.0.0',
+                },
+            },
         });
         providers.push(app);
 

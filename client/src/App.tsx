@@ -3,6 +3,7 @@ import './App.css'
 
 import { BridgeProvider, type ClientConnection, type WalletConsumer, type AppConsumer } from 'bridge-sdk'
 import { SessionCrypto } from '@tonconnect/protocol'
+import type { BridgeAppEventListener, BridgeWalletEventListener } from '../../src';
 
 type ConnectState = 'idle' | 'connecting' | 'connected' | 'error'
 
@@ -23,11 +24,11 @@ function App() {
     setLogs(prev => [new Date().toISOString() + ' ' + line, ...prev].slice(0, 200))
   }, [])
 
-  const appListener = useCallback((event: any) => {
+  const appListener = useCallback<BridgeAppEventListener>((event) => {
     appendLog(`app received ${event.lastEventId}: ${JSON.stringify(event)}`)
   }, [appendLog])
 
-  const walletListener = useCallback((event: any) => {
+  const walletListener = useCallback<BridgeWalletEventListener>((event) => {
     appendLog(`wallet received ${event.lastEventId}: ${JSON.stringify(event)}`)
     setReceived(event)
   }, [appendLog])
@@ -57,19 +58,27 @@ function App() {
       const appProvider = await BridgeProvider.open<AppConsumer>({
         bridgeUrl,
         clients: appClients,
-        listener: appListener as any,
+        listener: appListener,
         errorListener,
         onConnecting: () => appendLog('app connecting...'),
         onQueueDone: () => appendLog('app queue done.'),
         options: {
           heartbeatReconnectIntervalMs: heartbeatMs,
+        },
+        analytics: {
+          sharedEventData: {
+            client_environment: 'app',
+            network_id: '-239',
+            subsystem: 'dapp',
+            version: '1.0.0',
+          }
         }
       })
 
       const walletProvider = await BridgeProvider.open<WalletConsumer>({
         bridgeUrl,
         clients: walletClients,
-        listener: walletListener as any,
+        listener: walletListener,
         errorListener,
         onConnecting: () => appendLog('wallet connecting...'),
         onQueueDone: () => appendLog('wallet queue done.'),
@@ -132,9 +141,8 @@ function App() {
     const walletSession = walletSessionRef.current
     if (!appProvider || !appSession || !walletSession) return
 
-    const msg = { method: 'sendTransaction', params: [''], id: '1' } as any
     try {
-      await appProvider.send(msg, appSession, walletSession.sessionId, { attempts: 3 })
+      await appProvider.send({ method: 'sendTransaction', params: [''], id: '1' }, appSession, walletSession.sessionId, { attempts: 3 })
       appendLog('sent buy request')
     } catch (e) {
       appendLog('send failed: ' + String(e))

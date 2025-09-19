@@ -35,9 +35,11 @@
     "@tonconnect/isomorphic-fetch": "^0.0.3",
     "@tonconnect/protocol": "^2.3.0",
     "blakejs": "^1.2.1",
-    "tweetnacl": "^1.0.3"
+    "tweetnacl": "^1.0.3",
+    "uuid": "^13.0.0"
   },
   "devDependencies": {
+    "@hey-api/openapi-ts": "0.83.1",
     "@ton/toolchain": "the-ton-tech/toolchain#v1.4.0",
     "@types/jest": "^30.0.0",
     "@types/node": "^24.0.10",

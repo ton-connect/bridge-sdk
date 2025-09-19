@@ -6,6 +6,7 @@ import { logDebug, logError } from './utils/log';
 import { callForSuccess, RetryOptions } from './utils/call-for-success';
 import { createAbortController } from './utils/create-abort-controller';
 import { ClientConnection } from './models/client-connection';
+import { BridgeEventsCollector, SharedEventData, BridgeEventsCollectorOptions } from './analytics';
 import {
     BridgeEventListeners,
     BridgeMessages,
@@ -69,6 +70,11 @@ export type BridgeProviderOpenParams<TConsumer extends BridgeProviderConsumer> =
          */
         heartbeatReconnectIntervalMs?: number;
     };
+
+    analytics?: {
+        sharedEventData: Omit<SharedEventData, 'bridge_url'>;
+        options?: Omit<BridgeEventsCollectorOptions, 'sharedEventData'>;
+    };
 };
 
 export class BridgeProvider<TConsumer extends BridgeProviderConsumer> {
@@ -76,6 +82,8 @@ export class BridgeProvider<TConsumer extends BridgeProviderConsumer> {
     private lastEventId?: string;
     private abortController?: AbortController;
     private gateway: BridgeGateway | null = null;
+
+    private analytics?: BridgeEventsCollector;
 
     private onConnectingCallback?: () => void;
     private onQueueDoneCallback?: () => void;
@@ -87,6 +95,10 @@ export class BridgeProvider<TConsumer extends BridgeProviderConsumer> {
     private readonly defaultRetryDelayMs = 1_000;
     private readonly defaultMaxExponentialDelayMS = 7_000;
     private readonly missedHeartbeatDelay = 100;
+
+    private readonly defaultAnalyticsBatchTimoutMs = 5000;
+    private readonly defaultAnalyticsMaxBatchSize = 100;
+    private readonly defaultAnalyticsUrl = 'https://analytics.ton.org';
 
     private lastHeartbeatAt: number = Date.now();
     private heartbeatTimer: ReturnType<typeof setTimeout> | null = null;
@@ -107,7 +119,9 @@ export class BridgeProvider<TConsumer extends BridgeProviderConsumer> {
             params.listener,
             params.errorListener,
             params.options?.heartbeatReconnectIntervalMs,
+            params.analytics,
         );
+
         if (params.onConnecting) provider.onConnecting = params.onConnecting;
         if (params.onQueueDone) provider.onQueueDone = params.onQueueDone;
         try {
@@ -124,7 +138,26 @@ export class BridgeProvider<TConsumer extends BridgeProviderConsumer> {
         private listener: BridgeEventListeners[TConsumer] | null = null,
         private errorListener: ((error: unknown) => void) | null = null,
         private heartbeatReconnectIntervalMs: number | undefined = undefined,
-    ) {}
+        analytics?: {
+            sharedEventData: Omit<SharedEventData, 'bridge_url'>;
+            options?: Omit<BridgeEventsCollectorOptions, 'sharedEventData'>;
+        },
+    ) {
+        if (analytics?.sharedEventData) {
+            const sharedData: SharedEventData = {
+                ...analytics.sharedEventData,
+                bridge_url: bridgeUrl,
+                // TODO?: version use bridge sdk version or wallet?
+            };
+
+            this.analytics = new BridgeEventsCollector({
+                sharedEventData: sharedData,
+                batchTimeoutMs: analytics.options?.batchTimeoutMs ?? this.defaultAnalyticsBatchTimoutMs,
+                maxBatchSize: analytics.options?.maxBatchSize ?? this.defaultAnalyticsMaxBatchSize,
+                analyticsUrl: analytics.options?.analyticsUrl ?? this.defaultAnalyticsUrl,
+            });
+        }
+    }
 
     public get isReady(): boolean {
         return this.gateway?.isReady || false;
@@ -315,9 +348,22 @@ export class BridgeProvider<TConsumer extends BridgeProviderConsumer> {
             return;
         }
 
-        const encodedRequest = session.encrypt(JSON.stringify(message), hexToByteArray(clientSessionId));
+        let encodedRequest: Uint8Array;
+        try {
+            encodedRequest = session.encrypt(JSON.stringify(message), hexToByteArray(clientSessionId));
+        } catch (err) {
+            this.analytics?.emit({
+                event_name: 'bridge-request-decode-error',
+                client_id: session.sessionId,
+                trace_id: options?.traceId,
+                error_message: err instanceof Error ? err.message : 'Failed to encrypt request',
+            });
+            this.errorListener?.(err);
+            return;
+        }
 
-        const topic = options?.topic ?? ('method' in message ? message.method : undefined);
+        const method = 'method' in message ? message.method : undefined;
+        const topic = options?.topic ?? method;
         await callForSuccess(
             async ({ signal }) => {
                 await BridgeGateway.sendRequest(this.bridgeUrl, encodedRequest, session.sessionId, clientSessionId, {
@@ -325,6 +371,13 @@ export class BridgeProvider<TConsumer extends BridgeProviderConsumer> {
                     topic,
                     signal,
                     ttl: options?.ttl,
+                });
+                this.analytics?.emit({
+                    event_name: 'bridge-request-sent',
+                    client_id: session.sessionId,
+                    trace_id: options?.traceId,
+                    request_type: method,
+                    message_id: message?.id?.toString(),
                 });
             },
             {
@@ -388,16 +441,44 @@ export class BridgeProvider<TConsumer extends BridgeProviderConsumer> {
             return undefined;
         }
 
-        const decrypted = openAnonymous(
-            Base64.decode(requestSourceEncrypted).toUint8Array(),
-            hexToByteArray(session.sessionId),
-            hexToByteArray(session.stringifyKeypair().secretKey),
-        );
+        let decrypted: Uint8Array | null = null;
+        try {
+            decrypted = openAnonymous(
+                Base64.decode(requestSourceEncrypted).toUint8Array(),
+                hexToByteArray(session.sessionId),
+                hexToByteArray(session.stringifyKeypair().secretKey),
+            );
+        } catch (err) {
+            this.analytics?.emit({
+                event_name: 'bridge-request-decode-error',
+                client_id: session.sessionId,
+                error_message: err instanceof Error ? err.message : 'Failed to decrypt request_source',
+            });
+            this.errorListener?.(err);
+            return;
+        }
         if (!decrypted) {
-            throw new Error('Decrypt error ');
+            this.analytics?.emit({
+                event_name: 'bridge-request-decode-error',
+                client_id: session.sessionId,
+                error_message: 'Failed to decrypt request_source: openAnonymous returned null',
+            });
+            this.errorListener?.(new BridgeSdkError('Failed to decrypt request_source: openAnonymous returned null'));
+            return;
         }
 
-        let requestSource: BridgeRequestSourceRaw = JSON.parse(new TextDecoder().decode(decrypted));
+        let requestSource: BridgeRequestSourceRaw;
+        try {
+            requestSource = JSON.parse(new TextDecoder().decode(decrypted));
+        } catch (err) {
+            this.analytics?.emit({
+                event_name: 'bridge-request-decode-error',
+                client_id: session.sessionId,
+                error_message: err instanceof Error ? err.message : 'Failed to parse request_source JSON',
+            });
+            this.errorListener?.(err);
+            return;
+        }
 
         return {
             origin: requestSource.origin,
@@ -421,24 +502,61 @@ export class BridgeProvider<TConsumer extends BridgeProviderConsumer> {
         let bridgeIncomingMessage: BridgeIncomingMessage;
         try {
             bridgeIncomingMessage = JSON.parse(e.data);
-        } catch {
+        } catch (err) {
+            this.analytics?.emit({
+                event_name: 'bridge-response-decode-error',
+                // TODO: error_code?
+                // TODO trace_id not available, generate?
+                // TODO client_id not available
+                error_message: err instanceof Error ? err.message : 'Failed to parse incoming message',
+            });
             this.errorListener?.(new BridgeSdkError(`Failed to parse message: ${e.data}`));
             return;
         }
 
         const sessionCrypto = this.getCryptoSession(bridgeIncomingMessage.from);
 
-        const request = JSON.parse(
-            sessionCrypto.decrypt(
+        let decryptedStr: string;
+        try {
+            decryptedStr = sessionCrypto.decrypt(
                 Base64.decode(bridgeIncomingMessage.message).toUint8Array(),
                 hexToByteArray(bridgeIncomingMessage.from),
-            ),
-        );
+            );
+        } catch (err) {
+            this.analytics?.emit({
+                event_name: 'bridge-response-decode-error',
+                client_id: sessionCrypto.sessionId,
+                trace_id: bridgeIncomingMessage.trace_id,
+                error_message: err instanceof Error ? err.message : 'Failed to decrypt incoming message',
+            });
+            this.errorListener?.(new BridgeSdkError('Failed to decrypt incoming message'));
+            return;
+        }
+
+        let request;
+        try {
+            request = JSON.parse(decryptedStr);
+        } catch (err) {
+            this.analytics?.emit({
+                event_name: 'bridge-response-decode-error',
+                client_id: sessionCrypto.sessionId,
+                trace_id: bridgeIncomingMessage.trace_id,
+                error_message: err instanceof Error ? err.message : 'Failed to parse decrypted payload',
+            });
+            this.errorListener?.(new BridgeSdkError('Failed to parse decrypted payload'));
+            return;
+        }
         const requestSource = this.loadMaybeSource(sessionCrypto, bridgeIncomingMessage.request_source);
 
         logDebug('[BridgeProvider] Incoming message decrypted:', request);
 
         this.lastEventId = e.lastEventId;
+        this.analytics?.emit({
+            event_name: 'bridge-response-received', // TODO: or request? what is request and what is response? How request could be received
+            trace_id: bridgeIncomingMessage.trace_id,
+            message_id: request?.id?.toString(),
+            request_type: typeof request?.method === 'string' ? request.method : undefined,
+        });
         this.listener?.({
             lastEventId: e.lastEventId,
             traceId: bridgeIncomingMessage.trace_id,
@@ -455,6 +573,10 @@ export class BridgeProvider<TConsumer extends BridgeProviderConsumer> {
             try {
                 logDebug('[BridgeProvider] Error in gatewayErrorsListener, trying to reconnect:', e);
                 this.onConnectingCallback?.();
+                this.analytics?.emit({
+                    event_name: 'bridge-connect-error',
+                    error_message: JSON.stringify(e),
+                });
                 return this.reconnect(abortController.signal);
             } catch (error) {
                 abortController.abort();
@@ -465,6 +587,7 @@ export class BridgeProvider<TConsumer extends BridgeProviderConsumer> {
 
         const error = new BridgeSdkError(`Bridge error ${JSON.stringify(e)}`);
         logError('[BridgeProvider] Gateway error:', error);
+
         this.errorListener?.(error);
     }
 
@@ -506,12 +629,20 @@ export class BridgeProvider<TConsumer extends BridgeProviderConsumer> {
         logDebug('[BridgeProvider] BridgeGateway created. Connecting to bridge...');
 
         this.onConnectingCallback?.();
+        this.analytics?.emit({
+            event_name: 'bridge-connect-started',
+            // TODO trace_id?
+        });
         await this.gateway.registerSession({
             connectingDeadlineMS: options?.connectingDeadlineMS,
             signal: options?.signal,
         });
 
         logDebug('[BridgeProvider] Connected to bridge successfully.');
+        this.analytics?.emit({
+            event_name: 'bridge-connect-established',
+            // TODO trace_id?
+        });
     }
 
     private async closeGateway(): Promise<void> {

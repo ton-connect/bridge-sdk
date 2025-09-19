@@ -19,3 +19,5 @@ export { ClientConnection } from './models/client-connection';
 
 export { BridgeGateway } from './bridge-gateway';
 export { BridgeProvider } from './bridge-provider';
+
+export * from './analytics';
