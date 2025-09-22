@@ -5,7 +5,7 @@ export type BridgeSharedEvent = {
     from: string;
     traceId?: string;
     requestSource?: BridgeRequestSource;
-    connectSource?: string;
+    connectSource?: BridgeConnectSource;
 };
 export type BridgeAppEvent = AppRequest<RpcMethod> & BridgeSharedEvent;
 export type BridgeWalletEvent = WalletResponse<RpcMethod> & BridgeSharedEvent;
@@ -32,7 +32,7 @@ export type BridgeIncomingMessage = {
     trace_id?: string;
     message: string;
     request_source?: string;
-    connect_source?: string;
+    connect_source?: BridgeConnectSourceRaw;
 };
 
 export type BridgeRequestSource = {
@@ -42,9 +42,17 @@ export type BridgeRequestSource = {
     userAgent: string;
 };
 
+export type BridgeConnectSource = {
+    ip: string;
+};
+
 export type BridgeRequestSourceRaw = {
     origin: string;
     ip: string;
     time: string;
     user_agent: string;
+};
+
+export type BridgeConnectSourceRaw = {
+    ip: string;
 };
