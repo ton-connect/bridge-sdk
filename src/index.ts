@@ -14,6 +14,8 @@ export {
     BridgeWalletEvent,
     BridgeMessages,
     BridgeRequestSource,
+    BridgeVerifyType,
+    BridgeVerifyParams,
 } from './models/bridge-messages';
 export { ClientConnection } from './models/client-connection';
 

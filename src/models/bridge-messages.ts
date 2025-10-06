@@ -56,3 +56,15 @@ export type BridgeRequestSourceRaw = {
 export type BridgeConnectSourceRaw = {
     ip: string;
 };
+
+export type BridgeVerifyType = 'connect';
+export type BridgeVerifyParams = {
+    clientId: string;
+    url: string;
+    type?: BridgeVerifyType;
+    traceId?: string; // TODO: not done on bridge
+};
+export type BridgeVerifyStatus = 'ok' | 'unknown';
+export type BridgeVerifyResponse = {
+    status: BridgeVerifyStatus;
+};
