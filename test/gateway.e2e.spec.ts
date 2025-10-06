@@ -257,4 +257,14 @@ describe('BridgeGateway', () => {
             expect(from).toEqual(senderSession);
         });
     });
+
+    it('should verify request', async () => {
+        const session = randomSessionId();
+
+        const res = await BridgeGateway.verifyRequest(BRIDGE_URL, {
+            url: 'https://example.com',
+            clientId: session,
+        });
+        expect(res.status).toEqual('unknown');
+    });
 });

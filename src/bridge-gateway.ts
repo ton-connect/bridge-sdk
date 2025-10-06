@@ -8,6 +8,7 @@ import { logDebug, logError } from './utils/log';
 import { createResource } from './utils/resource';
 import { timeout } from './utils/timeout';
 import { HeartbeatFormat } from './models/heartbeat';
+import { BridgeVerifyParams, BridgeVerifyResponse } from './models/bridge-messages';
 
 export type BridgeGatewayOpenParams = {
     bridgeUrl: string;
@@ -23,6 +24,8 @@ export type BridgeGatewayOpenParams = {
 export class BridgeGateway {
     private static readonly ssePath = 'events';
     private static readonly postPath = 'message';
+    private static readonly verifyPath = 'verify';
+
     private static readonly defaultTtl = 300;
 
     private eventSource = createResource(
@@ -93,6 +96,32 @@ export class BridgeGateway {
         await this.eventSource.create(options?.signal, options?.connectingDeadlineMS);
     }
 
+    static async verifyRequest(
+        bridgeUrl: string,
+        params: BridgeVerifyParams,
+        options?: {
+            signal?: AbortSignal;
+        },
+    ): Promise<BridgeVerifyResponse> {
+        const url = new URL(addPathToUrl(bridgeUrl, this.verifyPath));
+        const response = await this.post(
+            url,
+            {
+                client_id: params.clientId,
+                url: params.url,
+                type: params.type,
+                // TODO: not supported by bridge yet
+                // trace_id: params.traceId,
+            },
+            options?.signal,
+        );
+
+        const result = await response.json();
+        return {
+            status: result.status,
+        };
+    }
+
     static async sendRequest(
         bridgeUrl: string,
         message: Uint8Array,
@@ -117,11 +146,16 @@ export class BridgeGateway {
         }
         const body = Base64.encode(message);
 
-        const response = await this.post(url, body, options?.signal);
+        await this.post(url, body, options?.signal);
+    }
 
-        if (!response.ok) {
-            throw new BridgeSdkError(`Bridge send failed, status ${response.status}`);
-        }
+    public async verify(
+        params: BridgeVerifyParams,
+        options?: {
+            signal?: AbortSignal;
+        },
+    ): Promise<BridgeVerifyResponse> {
+        return BridgeGateway.verifyRequest(this.bridgeUrl, params, options);
     }
 
     public async send(
@@ -152,15 +186,25 @@ export class BridgeGateway {
         this.errorsListener = errorsListener;
     }
 
-    private static async post(url: URL, body: string, signal?: AbortSignal): Promise<Response> {
+    private static async post(
+        url: URL,
+        body: Record<string, unknown> | string | undefined,
+        signal?: AbortSignal,
+    ): Promise<Response> {
         const response = await fetch(url, {
             method: 'post',
-            body,
+            body: typeof body === 'object' ? JSON.stringify(body) : body,
             signal,
+            headers:
+                typeof body === 'object'
+                    ? {
+                          'Content-Type': 'application/json',
+                      }
+                    : undefined,
         });
 
         if (!response.ok) {
-            throw new BridgeSdkError(`Bridge send failed, status ${response.status}`);
+            throw new BridgeSdkError(`Bridge post failed, status ${response.status}`);
         }
 
         return response;

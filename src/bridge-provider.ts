@@ -13,6 +13,8 @@ import {
     BridgeIncomingMessage,
     BridgeRequestSource,
     BridgeRequestSourceRaw,
+    BridgeVerifyParams,
+    BridgeVerifyResponse,
 } from './models/bridge-messages';
 import { distinct, equalsDistinct } from './utils/arrays';
 import { delay } from './utils/delay';
@@ -293,6 +295,28 @@ export class BridgeProvider<TConsumer extends BridgeProviderConsumer> {
                 attempts: Number.MAX_SAFE_INTEGER,
                 delayMs: options?.delayMs ?? this.defaultRetryDelayMs,
                 signal,
+                exponential: options?.exponential ?? true,
+                maxDelayMs: options?.maxDelayMs ?? this.defaultMaxExponentialDelayMS,
+            },
+        );
+    }
+
+    public async verify(
+        params: BridgeVerifyParams,
+        options?: {
+            signal?: AbortSignal;
+        } & RetryOptions,
+    ): Promise<BridgeVerifyResponse> {
+        return callForSuccess(
+            async ({ signal }) => {
+                return BridgeGateway.verifyRequest(this.bridgeUrl, params, {
+                    signal,
+                });
+            },
+            {
+                attempts: options?.attempts ?? Number.MAX_SAFE_INTEGER,
+                delayMs: options?.delayMs ?? this.defaultRetryDelayMs,
+                signal: options?.signal,
                 exponential: options?.exponential ?? true,
                 maxDelayMs: options?.maxDelayMs ?? this.defaultMaxExponentialDelayMS,
             },
