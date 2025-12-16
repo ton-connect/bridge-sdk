@@ -64,7 +64,7 @@ export type BridgeVerifyParams = {
     type?: BridgeVerifyType;
     traceId?: string; // TODO: not done on bridge
 };
-export type BridgeVerifyStatus = 'ok' | 'unknown';
+export type BridgeVerifyStatus = 'ok' | 'unknown' | 'warning' | 'danger';
 export type BridgeVerifyResponse = {
     status: BridgeVerifyStatus;
 };

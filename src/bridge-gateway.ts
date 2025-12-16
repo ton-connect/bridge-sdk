@@ -318,7 +318,7 @@ async function createEventSource(config: CreateEventSourceConfig): Promise<Event
             const eventSource = new EventSource(url.toString());
 
             let wasPreviouslyOpened = false;
-            eventSource.onerror = async (reason: Event): Promise<void> => {
+            eventSource.addEventListener('error', async (reason: Event) => {
                 logDebug('[BridgeGateway] EventSource error occurred:', JSON.stringify(reason));
 
                 if (signal?.aborted) {
@@ -340,9 +340,9 @@ async function createEventSource(config: CreateEventSourceConfig): Promise<Event
                     eventSource.close();
                     reject(e);
                 }
-            };
+            });
 
-            eventSource.onopen = (): void => {
+            eventSource.addEventListener('open', () => {
                 if (signal?.aborted) {
                     eventSource.close();
                     reject(new BridgeSdkError('Bridge connection aborted on open'));
@@ -352,9 +352,9 @@ async function createEventSource(config: CreateEventSourceConfig): Promise<Event
                 wasPreviouslyOpened = true;
                 logDebug('[BridgeGateway] EventSource connection established.');
                 resolve(eventSource);
-            };
+            });
 
-            eventSource.onmessage = (event: MessageEvent<string>): void => {
+            eventSource.addEventListener('message', (event: MessageEvent<string>) => {
                 if (signal?.aborted) {
                     eventSource.close();
                     reject(new BridgeSdkError('Bridge connection aborted on message'));
@@ -363,7 +363,7 @@ async function createEventSource(config: CreateEventSourceConfig): Promise<Event
 
                 lastEventId = event.lastEventId;
                 config.messageHandler(event);
-            };
+            });
 
             config.signal?.addEventListener(
                 'abort',
