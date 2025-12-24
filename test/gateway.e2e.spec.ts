@@ -4,7 +4,7 @@ import { Base64, SessionCrypto } from '@tonconnect/protocol';
 import { BridgeGateway } from '../src';
 import { delay } from '../src/utils/delay';
 
-const BRIDGE_URL = process.env.BRIDGE_URL || 'https://walletbot.me/tonconnect-bridge/bridge';
+const BRIDGE_URL = process.env.BRIDGE_URL || 'https:/connect.ton.org/bridge';
 
 function randomSessionId() {
     const session = new SessionCrypto();

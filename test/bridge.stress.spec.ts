@@ -4,7 +4,7 @@ import { SessionCrypto } from '@tonconnect/protocol';
 import { AppConsumer, BridgeProvider, BridgeProviderConsumer, WalletConsumer } from '../src';
 import { delay } from '../src/utils/delay';
 
-const BRIDGE_URL = process.env.BRIDGE_URL || 'https://walletbot.me/tonconnect-bridge/bridge';
+const BRIDGE_URL = process.env.BRIDGE_URL || 'https:/connect.ton.org/bridge';
 
 describe('Bridge stress tests', () => {
     let providers: BridgeProvider<BridgeProviderConsumer>[] = [];
