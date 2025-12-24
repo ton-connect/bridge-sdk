@@ -28,7 +28,8 @@
     "lint:fix": "eslint . --max-warnings 0 --fix",
     "type-check": "tsc --noEmit",
     "build": "npm run type-check && tsup",
-    "test": "vitest run"
+    "test": "vitest run --exclude test/bridge.stress.spec.ts",
+    "test:stress": "vitest run test/bridge.stress.spec.ts"
   },
   "dependencies": {
     "@tonconnect/isomorphic-eventsource": "^0.0.2",
