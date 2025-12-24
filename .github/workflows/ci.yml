@@ -18,9 +18,7 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: '22'
-
-      - name: Clean npm cache
-        run: npm cache clean --force
+          cache: 'npm'
 
       - name: Install dependencies
         run: npm ci
@@ -40,9 +38,10 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: '22'
+          cache: 'npm'
 
       - name: Install dependencies
-        run: npm i
+        run: npm ci
 
       - name: Build project
         run: npm run build
@@ -59,12 +58,10 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: '22'
-
-      - name: Clean npm cache
-        run: npm cache clean --force
+          cache: 'npm'
 
       - name: Install dependencies
-        run: npm i
+        run: npm ci
 
       - name: Run tests
         run: npm test
